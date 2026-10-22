@@ -111,7 +111,6 @@ export const EmployeeFormWizard = ({ employee, onSave, onCancel, isEditing }: Em
       await onSave({
         ...formData,
         fullName: `${formData.firstName} ${formData.lastName}`,
-        status: 'active',
       });
     } catch (error) {
       console.error('Error saving employee:', error);
@@ -127,7 +126,6 @@ export const EmployeeFormWizard = ({ employee, onSave, onCancel, isEditing }: Em
       await onSave({
         ...formData,
         fullName: `${formData.firstName} ${formData.lastName}`,
-        status: 'active',
       });
     } catch (error) {
       console.error('Error saving employee:', error);

@@ -24,6 +24,7 @@ export const PersonalInfo = ({ employee, onNext, onCancel, onSave }: PersonalInf
     employeeId: employee?.employeeId || '',
     registrationNumber: employee?.registrationNumber || '',
     photo: employee?.photo || '',
+    status: employee?.status || 'active',
   });
 
   const [photoPreview, setPhotoPreview] = useState<string | null>(employee?.photo || null);
@@ -184,6 +185,20 @@ export const PersonalInfo = ({ employee, onNext, onCancel, onSave }: PersonalInf
             value={formData.joinDate?.toISOString().split('T')[0]}
             onChange={handleChange}
           />
+          <div>
+            <label className="block text-sm font-medium text-secondary-700 mb-2">Status</label>
+            <select
+              name="status"
+              value={formData.status}
+              onChange={handleChange}
+              className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+            >
+              <option value="active">Active</option>
+              <option value="resigned">Resigned</option>
+              <option value="terminated">Terminated</option>
+              <option value="on_leave">On Leave</option>
+            </select>
+          </div>
         </div>
 
         {/* Actions */}

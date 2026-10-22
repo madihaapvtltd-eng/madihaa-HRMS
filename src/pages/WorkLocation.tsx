@@ -126,10 +126,11 @@ export const WorkLocationPage = () => {
 
   const filteredEmployees = employees.filter(emp => {
     const searchLower = searchTerm.toLowerCase();
-    return (
+    const isActive = emp.status === 'active';
+    const matchesSearch = 
       emp.fullName?.toLowerCase().includes(searchLower) ||
-      emp.employeeId?.toLowerCase().includes(searchLower)
-    );
+      emp.employeeId?.toLowerCase().includes(searchLower);
+    return isActive && matchesSearch;
   });
 
   const getEmployeeAssignedLocation = (empId: string) => {
@@ -141,6 +142,7 @@ export const WorkLocationPage = () => {
 
   const getUnassignedStaff = () => {
     return employees.filter(emp => 
+      emp.status === 'active' &&
       !workLocations.some(loc => loc.assignedStaff?.includes(emp.id))
     );
   };

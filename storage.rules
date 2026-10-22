@@ -1,0 +1,67 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isSuperAdmin() {
+      return isAuthenticated() && 
+             request.auth.token.email == 'madihaapvtltd@gmail.com';
+    }
+    
+    function isHRManager() {
+      return isAuthenticated() && 
+             request.auth.token.email_verified;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Allow read/write for super admin on all files
+    match /{allPaths=**} {
+      allow read, write: if isSuperAdmin();
+    }
+    
+    // Employee documents
+    match /employees/{employeeId}/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isSuperAdmin() || isHRManager();
+    }
+    
+    // Profile pictures
+    match /profile-pictures/{userId}/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow create, update: if isSuperAdmin() || isHRManager() || isOwner(userId);
+      allow delete: if isSuperAdmin() || isOwner(userId);
+    }
+    
+    // Documents (ID cards, payslips, etc.)
+    match /documents/{userId}/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow create: if isSuperAdmin() || isHRManager() || isOwner(userId);
+      allow update, delete: if isSuperAdmin() || isHRManager();
+    }
+    
+    // Reports
+    match /reports/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow create, delete: if isSuperAdmin() || isHRManager();
+    }
+    
+    // Recruitment documents
+    match /recruitment/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isSuperAdmin() || isHRManager();
+    }
+    
+    // Training materials
+    match /training/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isSuperAdmin() || isHRManager();
+    }
+  }
+}

@@ -1,0 +1,119 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isSuperAdmin() {
+      return isAuthenticated() && 
+             request.auth.token.email == 'madihaapvtltd@gmail.com';
+    }
+    
+    function isHRManager() {
+      return isAuthenticated() && 
+             request.auth.token.email_verified;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Allow read/write for super admin
+    match /{document=**} {
+      allow read, write: if isSuperAdmin();
+    }
+    
+    // Employees collection
+    match /employees/{employeeId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isSuperAdmin() || isHRManager();
+    }
+    
+    // Attendance collection
+    match /attendance/{attendanceId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isSuperAdmin() || isHRManager() || isOwner(resource.data.userId);
+    }
+    
+    // Leave collection
+    match /leave/{leaveId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isSuperAdmin() || isHRManager() || isOwner(resource.data.userId);
+      allow delete: if isSuperAdmin();
+    }
+    
+    // Payroll collection
+    match /payroll/{payrollId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isSuperAdmin() || isHRManager();
+    }
+    
+    // Overtime collection
+    match /overtime/{overtimeId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isSuperAdmin() || isHRManager() || isOwner(resource.data.userId);
+      allow delete: if isSuperAdmin();
+    }
+    
+    // Recruitment collection
+    match /recruitment/{recruitmentId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isSuperAdmin() || isHRManager();
+    }
+    
+    // Training collection
+    match /training/{trainingId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isSuperAdmin() || isHRManager();
+    }
+    
+    // Performance collection
+    match /performance/{performanceId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isSuperAdmin() || isHRManager();
+    }
+    
+    // Lifecycle collection
+    match /lifecycle/{lifecycleId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isSuperAdmin() || isHRManager();
+    }
+    
+    // Reports collection
+    match /reports/{reportId} {
+      allow read: if isAuthenticated();
+      allow create, delete: if isSuperAdmin() || isHRManager();
+    }
+    
+    // Accommodation collections
+    match /accommodations/{accommodationId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isSuperAdmin() || isHRManager();
+    }
+    
+    match /floors/{floorId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isSuperAdmin() || isHRManager();
+    }
+    
+    match /rooms/{roomId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isSuperAdmin() || isHRManager();
+    }
+    
+    match /beds/{bedId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isSuperAdmin() || isHRManager();
+    }
+    
+    match /accommodation_assignments/{assignmentId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isSuperAdmin() || isHRManager();
+    }
+  }
+}

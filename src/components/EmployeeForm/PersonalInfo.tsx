@@ -1,0 +1,206 @@
+import { useState } from 'react';
+import { Input } from '../ui/Input';
+import { Button } from '../ui/Button';
+import { Upload, X } from 'lucide-react';
+import type { Employee } from '../../types';
+
+interface PersonalInfoProps {
+  employee?: Partial<Employee>;
+  onNext: (data: Partial<Employee>) => void;
+  onCancel: () => void;
+  onSave?: (data: Partial<Employee>) => Promise<void>;
+}
+
+export const PersonalInfo = ({ employee, onNext, onCancel, onSave }: PersonalInfoProps) => {
+  const [isSaving, setIsSaving] = useState(false);
+  const [formData, setFormData] = useState<Partial<Employee>>({
+    firstName: employee?.firstName || '',
+    lastName: employee?.lastName || '',
+    email: employee?.email || '',
+    phone: employee?.phone || '',
+    department: employee?.department || '',
+    designation: employee?.designation || '',
+    joinDate: employee?.joinDate || new Date(),
+    employeeId: employee?.employeeId || '',
+    registrationNumber: employee?.registrationNumber || '',
+    photo: employee?.photo || '',
+  });
+
+  const [photoPreview, setPhotoPreview] = useState<string | null>(employee?.photo || null);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    if (name === 'joinDate') {
+      setFormData(prev => ({ ...prev, [name]: new Date(value) }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
+  };
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const result = reader.result as string;
+        setPhotoPreview(result);
+        setFormData(prev => ({ ...prev, photo: result }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onNext({
+      ...formData,
+      fullName: `${formData.firstName} ${formData.lastName}`,
+    });
+  };
+
+  const handleSave = async () => {
+    if (!onSave) return;
+    setIsSaving(true);
+    try {
+      await onSave({
+        ...formData,
+        fullName: `${formData.firstName} ${formData.lastName}`,
+      });
+    } catch (error) {
+      console.error('Error saving:', error);
+      alert('Error saving. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-2xl font-bold text-secondary-900">Personal Information</h2>
+        <p className="text-secondary-600 mt-1">Enter employee's basic details</p>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Photo Upload */}
+        <div className="flex flex-col items-center">
+          {photoPreview ? (
+            <div className="relative">
+              <img
+                src={photoPreview}
+                alt="Employee"
+                className="w-32 h-32 rounded-full object-cover border-4 border-primary-200"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  setPhotoPreview(null);
+                  setFormData(prev => ({ ...prev, photo: '' }));
+                }}
+                className="absolute top-0 right-0 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <label className="w-32 h-32 border-2 border-dashed border-primary-300 rounded-full flex items-center justify-center cursor-pointer hover:border-primary-500 transition">
+              <div className="text-center">
+                <Upload className="w-6 h-6 text-primary-500 mx-auto" />
+                <span className="text-xs text-secondary-600">Upload Photo</span>
+              </div>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handlePhotoUpload}
+                className="hidden"
+              />
+            </label>
+          )}
+        </div>
+
+        {/* Two Column Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Input
+            label="First Name"
+            name="firstName"
+            value={formData.firstName}
+            onChange={handleChange}
+            placeholder="Enter first name"
+          />
+          <Input
+            label="Last Name"
+            name="lastName"
+            value={formData.lastName}
+            onChange={handleChange}
+            placeholder="Enter last name"
+          />
+          <Input
+            label="Employee ID"
+            name="employeeId"
+            value={formData.employeeId}
+            onChange={handleChange}
+            placeholder="e.g., EMP001"
+          />
+          <Input
+            label="Registration Number"
+            name="registrationNumber"
+            value={formData.registrationNumber}
+            onChange={handleChange}
+            placeholder="Enter registration number"
+          />
+          <Input
+            label="Email"
+            name="email"
+            type="email"
+            value={formData.email}
+            onChange={handleChange}
+            placeholder="Enter email address"
+          />
+          <Input
+            label="Phone Number"
+            name="phone"
+            value={formData.phone}
+            onChange={handleChange}
+            placeholder="Enter phone number"
+          />
+          <Input
+            label="Department"
+            name="department"
+            value={formData.department}
+            onChange={handleChange}
+            placeholder="Select department"
+          />
+          <Input
+            label="Designation"
+            name="designation"
+            value={formData.designation}
+            onChange={handleChange}
+            placeholder="Enter designation"
+          />
+          <Input
+            label="Join Date"
+            name="joinDate"
+            type="date"
+            value={formData.joinDate?.toISOString().split('T')[0]}
+            onChange={handleChange}
+          />
+        </div>
+
+        {/* Actions */}
+        <div className="flex gap-4 justify-end pt-4 border-t border-secondary-200">
+          <Button variant="secondary" onClick={onCancel}>
+            Cancel
+          </Button>
+          {onSave && (
+            <Button variant="secondary" onClick={handleSave} disabled={isSaving}>
+              {isSaving ? 'Saving...' : 'Save'}
+            </Button>
+          )}
+          <Button type="submit">
+            Next: Passport/ID Details
+          </Button>
+        </div>
+      </form>
+    </div>
+  );
+};

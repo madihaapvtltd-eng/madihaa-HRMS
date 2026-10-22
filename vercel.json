@@ -48,12 +48,12 @@
     }
   ],
   "env": {
-    "VITE_FIREBASE_API_KEY": "@firebase_api_key",
-    "VITE_FIREBASE_AUTH_DOMAIN": "@firebase_auth_domain",
-    "VITE_FIREBASE_PROJECT_ID": "@firebase_project_id",
-    "VITE_FIREBASE_STORAGE_BUCKET": "@firebase_storage_bucket",
-    "VITE_FIREBASE_MESSAGING_SENDER_ID": "@firebase_messaging_sender_id",
-    "VITE_FIREBASE_APP_ID": "@firebase_app_id",
-    "VITE_FIREBASE_MEASUREMENT_ID": "@firebase_measurement_id"
+    "VITE_FIREBASE_API_KEY": "AIzaSyCZ4Uf6JeRkkSj4W6LGl7OcQL9Dn0EsdFM",
+    "VITE_FIREBASE_AUTH_DOMAIN": "madihaa-hrm.firebaseapp.com",
+    "VITE_FIREBASE_PROJECT_ID": "madihaa-hrm",
+    "VITE_FIREBASE_STORAGE_BUCKET": "madihaa-hrm.firebasestorage.app",
+    "VITE_FIREBASE_MESSAGING_SENDER_ID": "530461998768",
+    "VITE_FIREBASE_APP_ID": "1:530461998768:web:9e516eb075705679c14575",
+    "VITE_FIREBASE_MEASUREMENT_ID": "G-V6565Z0E8T"
   }
 }

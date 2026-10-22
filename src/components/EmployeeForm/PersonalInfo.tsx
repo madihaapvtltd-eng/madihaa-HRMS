@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
 import { Upload, X } from 'lucide-react';
@@ -13,19 +13,26 @@ interface PersonalInfoProps {
 
 export const PersonalInfo = ({ employee, onNext, onCancel, onSave }: PersonalInfoProps) => {
   const [isSaving, setIsSaving] = useState(false);
-  const [formData, setFormData] = useState<Partial<Employee>>({
-    firstName: employee?.firstName || '',
-    lastName: employee?.lastName || '',
-    email: employee?.email || '',
-    phone: employee?.phone || '',
-    department: employee?.department || '',
-    designation: employee?.designation || '',
-    joinDate: employee?.joinDate || new Date(),
-    employeeId: employee?.employeeId || '',
-    registrationNumber: employee?.registrationNumber || '',
-    photo: employee?.photo || '',
-    status: employee?.status || 'active',
-  });
+  const [formData, setFormData] = useState<Partial<Employee>>({});
+
+  // Update formData when employee prop changes
+  useEffect(() => {
+    if (employee) {
+      setFormData({
+        firstName: employee.firstName || '',
+        lastName: employee.lastName || '',
+        email: employee.email || '',
+        phone: employee.phone || '',
+        department: employee.department || '',
+        designation: employee.designation || '',
+        joinDate: employee.joinDate,
+        employeeId: employee.employeeId || '',
+        registrationNumber: employee.registrationNumber || '',
+        photo: employee.photo || '',
+        status: employee.status || 'active',
+      });
+    }
+  }, [employee]);
 
   const [photoPreview, setPhotoPreview] = useState<string | null>(employee?.photo || null);
 
@@ -33,6 +40,8 @@ export const PersonalInfo = ({ employee, onNext, onCancel, onSave }: PersonalInf
     const { name, value } = e.target;
     if (name === 'joinDate') {
       setFormData(prev => ({ ...prev, [name]: new Date(value) }));
+    } else if (name === 'status') {
+      setFormData(prev => ({ ...prev, [name]: value.toLowerCase() as any }));
     } else {
       setFormData(prev => ({ ...prev, [name]: value }));
     }
@@ -56,6 +65,7 @@ export const PersonalInfo = ({ employee, onNext, onCancel, onSave }: PersonalInf
     onNext({
       ...formData,
       fullName: `${formData.firstName} ${formData.lastName}`,
+      status: formData.status,
     });
   };
 
@@ -63,10 +73,12 @@ export const PersonalInfo = ({ employee, onNext, onCancel, onSave }: PersonalInf
     if (!onSave) return;
     setIsSaving(true);
     try {
-      await onSave({
+      const dataToSave = {
         ...formData,
         fullName: `${formData.firstName} ${formData.lastName}`,
-      });
+        status: formData.status,
+      };
+      await onSave(dataToSave);
     } catch (error) {
       console.error('Error saving:', error);
       alert('Error saving. Please try again.');

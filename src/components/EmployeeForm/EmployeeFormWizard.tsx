@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { PersonalInfo } from './PersonalInfo';
 import { PassportIDDetails } from './PassportIDDetails';
 import { WorkPermitVisa } from './WorkPermitVisa';
@@ -19,24 +19,31 @@ interface EmployeeFormWizardProps {
 export const EmployeeFormWizard = ({ employee, onSave, onCancel, isEditing }: EmployeeFormWizardProps) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
-  const [formData, setFormData] = useState<Partial<Employee>>({
-    firstName: employee?.firstName || '',
-    lastName: employee?.lastName || '',
-    email: employee?.email || '',
-    phone: employee?.phone || '',
-    department: employee?.department || '',
-    designation: employee?.designation || '',
-    joinDate: employee?.joinDate || new Date(),
-    employeeId: employee?.employeeId || '',
-    registrationNumber: employee?.registrationNumber || '',
-    photo: employee?.photo || '',
-    emergencyContact: employee?.emergencyContact || { name: '', relationship: '', phone: '' },
-    employmentHistory: employee?.employmentHistory || [],
-    documents: employee?.documents || [],
-    contractDetails: employee?.contractDetails,
-    probationDetails: employee?.probationDetails,
-    accommodation: employee?.accommodation,
-  });
+  const [formData, setFormData] = useState<Partial<Employee>>({});
+
+  useEffect(() => {
+    if (employee) {
+      setFormData({
+        firstName: employee.firstName || '',
+        lastName: employee.lastName || '',
+        email: employee.email || '',
+        phone: employee.phone || '',
+        department: employee.department || '',
+        designation: employee.designation || '',
+        joinDate: employee.joinDate,
+        employeeId: employee.employeeId || '',
+        registrationNumber: employee.registrationNumber || '',
+        photo: employee.photo || '',
+        status: employee.status || 'active',
+        emergencyContact: employee.emergencyContact || { name: '', relationship: '', phone: '' },
+        employmentHistory: employee.employmentHistory || [],
+        documents: employee.documents || [],
+        contractDetails: employee.contractDetails,
+        probationDetails: employee.probationDetails,
+        accommodation: employee.accommodation,
+      });
+    }
+  }, [employee]);
 
   const steps = [
     { title: 'Personal Information', icon: '👤' },
@@ -105,13 +112,21 @@ export const EmployeeFormWizard = ({ employee, onSave, onCancel, isEditing }: Em
     handleComplete();
   };
 
-  const handleSaveCurrent = async () => {
+  const handleSaveCurrent = async (data?: Partial<Employee>) => {
     setIsSaving(true);
     try {
-      await onSave({
+      // If data is provided (from PersonalInfo save), use it directly
+      const dataToSave = data ? {
+        ...data,
+        fullName: `${data.firstName || formData.firstName} ${data.lastName || formData.lastName}`,
+      } : {
         ...formData,
         fullName: `${formData.firstName} ${formData.lastName}`,
-      });
+      };
+      
+      await onSave(dataToSave);
+      // Update formData with the saved data to ensure status is preserved
+      setFormData(prev => ({ ...prev, ...dataToSave }));
     } catch (error) {
       console.error('Error saving employee:', error);
       alert('Error saving employee. Please try again.');
@@ -140,10 +155,13 @@ export const EmployeeFormWizard = ({ employee, onSave, onCancel, isEditing }: Em
       case 0:
         return (
           <PersonalInfo
-            employee={formData}
+            employee={employee}
             onNext={handlePersonalInfoNext}
             onCancel={onCancel}
-            onSave={handleSaveCurrent}
+            onSave={async (data) => {
+              setFormData(prev => ({ ...prev, ...data }));
+              await handleSaveCurrent(data);
+            }}
           />
         );
       case 1:

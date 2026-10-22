@@ -12,25 +12,27 @@ import type { Employee } from '../types';
 export const Employees = () => {
   const navigate = useNavigate();
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [showImportModal, setShowImportModal] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importResults, setImportResults] = useState<{ success: number; failed: number; skipped: number; errors: string[] } | null>(null);
-  const [displayLimit] = useState(25);
+  const [activeTab, setActiveTab] = useState<'current' | 'on_leave' | 'no_status' | 'past'>('no_status');
 
   const loadEmployees = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await getEmployees(displayLimit);
+      const data = await getEmployees();
+      setAllEmployees(data);
       setEmployees(data);
     } catch (error) {
       console.error('Error loading employees:', error);
     } finally {
       setLoading(false);
     }
-  }, [displayLimit]);
+  }, []);
 
   useEffect(() => {
     loadEmployees();
@@ -143,7 +145,19 @@ export const Employees = () => {
     
     const matchesStatus = filterStatus === 'all' || employee.status === filterStatus;
     
-    return matchesSearch && matchesStatus;
+    // Filter based on active tab
+    const validStatuses = ['active', 'resigned', 'terminated', 'on_leave'];
+    const hasValidStatus = validStatuses.includes(employee.status);
+    
+    const matchesTab = activeTab === 'current' 
+      ? employee.status === 'active'
+      : activeTab === 'on_leave'
+      ? (employee.status === 'on_leave')
+      : activeTab === 'no_status'
+      ? !hasValidStatus
+      : (employee.status === 'resigned' || employee.status === 'terminated');
+    
+    return matchesSearch && matchesStatus && matchesTab;
   });
 
   const statusColors = {
@@ -190,36 +204,120 @@ export const Employees = () => {
         </div>
       </div>
 
+      {/* Tabs */}
+      <div className="flex gap-2 border-b border-secondary-200">
+        <button
+          onClick={() => setActiveTab('current')}
+          className={`px-4 py-2 font-medium transition-colors ${
+            activeTab === 'current'
+              ? 'text-primary-600 border-b-2 border-primary-600'
+              : 'text-secondary-600 hover:text-secondary-900'
+          }`}
+        >
+          Current Employees
+        </button>
+        <button
+          onClick={() => setActiveTab('on_leave')}
+          className={`px-4 py-2 font-medium transition-colors ${
+            activeTab === 'on_leave'
+              ? 'text-primary-600 border-b-2 border-primary-600'
+              : 'text-secondary-600 hover:text-secondary-900'
+          }`}
+        >
+          On Leave
+        </button>
+        <button
+          onClick={() => setActiveTab('no_status')}
+          className={`px-4 py-2 font-medium transition-colors ${
+            activeTab === 'no_status'
+              ? 'text-primary-600 border-b-2 border-primary-600'
+              : 'text-secondary-600 hover:text-secondary-900'
+          }`}
+        >
+          No Status
+        </button>
+        <button
+          onClick={() => setActiveTab('past')}
+          className={`px-4 py-2 font-medium transition-colors ${
+            activeTab === 'past'
+              ? 'text-primary-600 border-b-2 border-primary-600'
+              : 'text-secondary-600 hover:text-secondary-900'
+          }`}
+        >
+          Past Employees
+        </button>
+      </div>
+
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4">
-            <p className="text-sm text-secondary-600">Total Employees</p>
-            <p className="text-2xl font-bold text-secondary-900">{employees.length}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-sm text-secondary-600">Active</p>
-            <p className="text-2xl font-bold text-green-600">
-              {employees.filter(e => e.status === 'active').length}
+            <p className="text-sm text-secondary-600">
+              {activeTab === 'current' ? 'Current' : activeTab === 'on_leave' ? 'On Leave' : activeTab === 'no_status' ? 'No Status' : 'Past'} Employees
+            </p>
+            <p className="text-2xl font-bold text-secondary-900">
+              {activeTab === 'current' 
+                ? allEmployees.filter(e => e.status === 'active').length
+                : activeTab === 'on_leave'
+                ? allEmployees.filter(e => e.status === 'on_leave').length
+                : activeTab === 'no_status'
+                ? allEmployees.filter(e => !['active', 'resigned', 'terminated', 'on_leave'].includes(e.status)).length
+                : allEmployees.filter(e => e.status === 'resigned' || e.status === 'terminated').length
+              }
             </p>
           </CardContent>
         </Card>
+        {activeTab === 'current' ? (
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-sm text-secondary-600">Active</p>
+              <p className="text-2xl font-bold text-green-600">
+                {allEmployees.filter(e => e.status === 'active').length}
+              </p>
+            </CardContent>
+          </Card>
+        ) : activeTab === 'on_leave' ? (
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-sm text-secondary-600">On Leave</p>
+              <p className="text-2xl font-bold text-yellow-600">
+                {allEmployees.filter(e => e.status === 'on_leave').length}
+              </p>
+            </CardContent>
+          </Card>
+        ) : activeTab === 'no_status' ? (
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-sm text-secondary-600">Needs Fixing</p>
+              <p className="text-2xl font-bold text-orange-600">
+                {allEmployees.filter(e => !['active', 'resigned', 'terminated', 'on_leave'].includes(e.status)).length}
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            <Card>
+              <CardContent className="p-4">
+                <p className="text-sm text-secondary-600">Resigned</p>
+                <p className="text-2xl font-bold text-red-600">
+                  {allEmployees.filter(e => e.status === 'resigned').length}
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <p className="text-sm text-secondary-600">Terminated</p>
+                <p className="text-2xl font-bold text-red-600">
+                  {allEmployees.filter(e => e.status === 'terminated').length}
+                </p>
+              </CardContent>
+            </Card>
+          </>
+        )}
         <Card>
           <CardContent className="p-4">
-            <p className="text-sm text-secondary-600">On Leave</p>
-            <p className="text-2xl font-bold text-yellow-600">
-              {employees.filter(e => e.status === 'on_leave').length}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-sm text-secondary-600">Inactive</p>
-            <p className="text-2xl font-bold text-red-600">
-              {employees.filter(e => e.status === 'resigned' || e.status === 'terminated').length}
-            </p>
+            <p className="text-sm text-secondary-600">Total in Database</p>
+            <p className="text-2xl font-bold text-secondary-900">{allEmployees.length}</p>
           </CardContent>
         </Card>
       </div>
@@ -345,12 +443,14 @@ export const Employees = () => {
                     )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${statusColors[employee.status]}`}>
+                    <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${statusColors[employee.status.toLowerCase() as keyof typeof statusColors] || 'bg-gray-100 text-gray-800'}`}>
                       {employee.status.replace('_', ' ')}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary-600">
-                    {new Date(employee.joinDate).toLocaleDateString()}
+                    {employee.joinDate instanceof Date && !isNaN(employee.joinDate.getTime())
+                      ? employee.joinDate.toLocaleDateString()
+                      : 'N/A'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <div className="flex items-center justify-end space-x-2">

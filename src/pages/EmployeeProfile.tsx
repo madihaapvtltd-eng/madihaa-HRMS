@@ -59,12 +59,17 @@ export const EmployeeProfilePage = ({ isEditing = false }: EmployeeProfilePagePr
       if (newAccommodation !== oldAccommodation) {
         // Clear old accommodation if exists
         if (oldAccommodation?.bedId) {
-          await updateBed(oldAccommodation.bedId, {
-            assignedEmployeeId: undefined,
-            assignedEmployeeName: undefined,
-            assignedDate: undefined,
-            status: 'available'
-          });
+          try {
+            await updateBed(oldAccommodation.bedId, {
+              assignedEmployeeId: undefined,
+              assignedEmployeeName: undefined,
+              assignedDate: undefined,
+              status: 'available'
+            });
+          } catch (bedError) {
+            console.warn('Bed no longer exists, skipping update:', bedError);
+            // Continue with save even if bed update fails
+          }
           // Note: We're not deleting the assignment record here as we don't have the assignment ID
           // In production, you'd want to track the assignment ID
         }

@@ -100,19 +100,126 @@ const employeeToFirestore = (employee: Partial<Employee>): any => {
 const employeeFromFirestore = (data: any): Employee => {
   const employee = { ...data };
   
+  // Map old field names to new field names (for migrated data)
+  // Old CSV import fields -> New Employee type fields
+  if (!employee.firstName && employee.name) {
+    const nameParts = employee.name.split(' ');
+    employee.firstName = nameParts[0] || '';
+    employee.lastName = nameParts.slice(1).join(' ') || '';
+  }
+  
+  // Also try to split fullName if firstName is missing
+  if (!employee.firstName && employee.fullName) {
+    const nameParts = employee.fullName.split(' ');
+    employee.firstName = nameParts[0] || '';
+    employee.lastName = nameParts.slice(1).join(' ') || '';
+  }
+  
+  // Map wpNo to employeeId if employeeId is missing
+  if (!employee.employeeId && employee.wpNo) {
+    employee.employeeId = employee.wpNo;
+  }
+  
+  // Map jobLevel to designation if designation is missing
+  if (!employee.designation && employee.jobLevel) {
+    employee.designation = employee.jobLevel;
+  }
+  
+  // Map various join date field names
+  if (!employee.joinDate && employee.joiningDate) {
+    employee.joinDate = employee.joiningDate;
+  }
+  if (!employee.joinDate && employee.dateJoined) {
+    employee.joinDate = employee.dateJoined;
+  }
+  if (!employee.joinDate && employee.joining) {
+    employee.joinDate = employee.joining;
+  }
+  if (!employee.joinDate && employee.dateOfJoining) {
+    employee.joinDate = employee.dateOfJoining;
+  }
+  if (!employee.joinDate && employee.doj) {
+    employee.joinDate = employee.doj;
+  }
+  
+  // If joinDate is still missing or empty object, try to infer from other date fields
+  if (!employee.joinDate || (typeof employee.joinDate === 'object' && Object.keys(employee.joinDate).length === 0)) {
+    // Try qtaPaid as a fallback (seems to be a date field in the data)
+    if (employee.qtaPaid && employee.qtaPaid !== 'N/A' && employee.qtaPaid !== '') {
+      employee.joinDate = employee.qtaPaid;
+    }
+    // If still no joinDate, leave it undefined (will be handled by defaults)
+  }
+  
+  // Ensure required fields have defaults
+  if (!employee.firstName) employee.firstName = '';
+  if (!employee.lastName) employee.lastName = '';
+  if (!employee.fullName) employee.fullName = `${employee.firstName || ''} ${employee.lastName || ''}`.trim();
+  if (!employee.email) employee.email = '';
+  if (!employee.phone) employee.phone = '';
+  if (!employee.photo) employee.photo = '';
+  if (!employee.employeeId) employee.employeeId = '';
+  if (!employee.registrationNumber) employee.registrationNumber = '';
+  if (!employee.department) employee.department = '';
+  if (!employee.designation) employee.designation = '';
+  if (!employee.status) employee.status = 'active';
+  if (!employee.emergencyContact) employee.emergencyContact = { name: '', relationship: '', phone: '' };
+  if (!employee.employmentHistory) employee.employmentHistory = [];
+  if (!employee.education) employee.education = [];
+  if (!employee.medicalInfo) employee.medicalInfo = {};
+  if (!employee.documents) employee.documents = [];
+  if (!employee.assets) employee.assets = [];
+  
   // Convert Timestamps to Date objects (handle Date, Timestamp, and string)
   const convertToDate = (value: any): Date | undefined => {
     if (!value) return undefined;
     if (value instanceof Date) return value;
     if (typeof value === 'string') {
+      // Try parsing the date string
       const parsed = new Date(value);
-      return isNaN(parsed.getTime()) ? undefined : parsed;
+      if (!isNaN(parsed.getTime())) return parsed;
+      
+      // Try parsing formats like "1-Apr-2027"
+      const months: { [key: string]: number } = {
+        'jan': 0, 'feb': 1, 'mar': 2, 'apr': 3, 'may': 4, 'jun': 5,
+        'jul': 6, 'aug': 7, 'sep': 8, 'oct': 9, 'nov': 10, 'dec': 11
+      };
+      const parts = value.split('-');
+      if (parts.length === 3) {
+        const day = parseInt(parts[0]);
+        const monthStr = parts[1].toLowerCase().substring(0, 3);
+        const year = parseInt(parts[2]);
+        if (months[monthStr] !== undefined && !isNaN(day) && !isNaN(year)) {
+          const date = new Date(year, months[monthStr], day);
+          if (!isNaN(date.getTime())) return date;
+        }
+      }
+      
+      // Try parsing DD/MM/YY or DD/MM/YYYY format (e.g., "28/04/1994", "21/02/13")
+      const slashParts = value.split('/');
+      if (slashParts.length === 3) {
+        const day = parseInt(slashParts[0]);
+        const month = parseInt(slashParts[1]) - 1; // Months are 0-indexed
+        let year = parseInt(slashParts[2]);
+        
+        // Handle 2-digit years (e.g., "13" -> 2013)
+        if (year < 100) {
+          year += year < 50 ? 2000 : 1900;
+        }
+        
+        if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+          const date = new Date(year, month, day);
+          if (!isNaN(date.getTime())) return date;
+        }
+      }
+      
+      return undefined;
     }
     if (value.toDate) return value.toDate();
     return undefined;
   };
   
-  employee.joinDate = convertToDate(employee.joinDate) || new Date();
+  employee.joinDate = convertToDate(employee.joinDate);
   employee.contractEndDate = convertToDate(employee.contractEndDate);
   employee.createdAt = convertToDate(employee.createdAt) || new Date();
   employee.updatedAt = convertToDate(employee.updatedAt) || new Date();
@@ -222,17 +329,11 @@ export const createEmployee = async (employee: Partial<Employee>) => {
 };
 
 // Update employee
-export const updateEmployee = async (id: string, employee: Partial<Employee>) => {
+export const updateEmployee = async (id: string, data: Partial<Employee>) => {
   try {
-    const updatedEmployee = {
-      ...employee,
-      updatedAt: new Date()
-    };
-    
-    await updateDoc(
-      doc(db, EMPLOYEES_COLLECTION, id),
-      employeeToFirestore(updatedEmployee)
-    );
+    const firestoreData = employeeToFirestore(data);
+    const employeeRef = doc(db, 'employees', id);
+    await updateDoc(employeeRef, firestoreData);
   } catch (error) {
     console.error('Error updating employee:', error);
     throw error;

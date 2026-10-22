@@ -164,7 +164,6 @@ export const getEmployees = async (limitCount?: number) => {
       ? query(
           collection(db, EMPLOYEES_COLLECTION),
           orderBy('createdAt', 'desc'),
-          orderBy('fullName'),
           limit(limitCount)
         )
       : query(

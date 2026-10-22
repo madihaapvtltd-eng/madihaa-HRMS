@@ -156,6 +156,20 @@ export const WorkLocationPage = () => {
     );
   };
 
+  const handleRemoveStaff = async (locationId: string, staffId: string) => {
+    try {
+      const location = await getWorkLocation(locationId);
+      if (location) {
+        const updatedStaff = (location.assignedStaff || []).filter(id => id !== staffId);
+        await assignStaffToWorkLocation(locationId, updatedStaff);
+        loadData();
+      }
+    } catch (error) {
+      console.error('Error removing staff:', error);
+      alert('Failed to remove staff');
+    }
+  };
+
   const handleBulkAssign = async () => {
     if (!bulkSelectedLocation || bulkSelectedStaff.length === 0) {
       alert('Please select a work location and at least one staff member');
@@ -259,19 +273,21 @@ export const WorkLocationPage = () => {
                 <div className="mt-4 pt-4 border-t border-secondary-200">
                   <p className="text-xs text-secondary-500 mb-2">Assigned Staff:</p>
                   <div className="flex flex-wrap gap-2">
-                    {location.assignedStaff.slice(0, 3).map((staffId) => {
+                    {location.assignedStaff.map((staffId) => {
                       const emp = employees.find(e => e.id === staffId);
                       return emp ? (
-                        <span key={staffId} className="text-xs bg-secondary-100 text-secondary-700 px-2 py-1 rounded">
+                        <span key={staffId} className="text-xs bg-secondary-100 text-secondary-700 px-2 py-1 rounded flex items-center gap-1">
                           {emp.fullName}
+                          <button
+                            onClick={() => handleRemoveStaff(location.id!, staffId)}
+                            className="ml-1 hover:text-red-600 transition-colors"
+                            title="Unassign"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
                         </span>
                       ) : null;
                     })}
-                    {location.assignedStaff.length > 3 && (
-                      <span className="text-xs bg-secondary-100 text-secondary-700 px-2 py-1 rounded">
-                        +{location.assignedStaff.length - 3} more
-                      </span>
-                    )}
                   </div>
                 </div>
               )}

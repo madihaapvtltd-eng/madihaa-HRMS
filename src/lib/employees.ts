@@ -9,6 +9,7 @@ import {
   query,
   where,
   orderBy,
+  limit,
   Timestamp
 } from 'firebase/firestore';
 import { db } from './firebase';
@@ -156,13 +157,20 @@ const employeeFromFirestore = (data: any): Employee => {
   return employee as Employee;
 };
 
-// Get all employees
-export const getEmployees = async () => {
+// Get all employees with optional limit
+export const getEmployees = async (limitCount?: number) => {
   try {
-    const q = query(
-      collection(db, EMPLOYEES_COLLECTION),
-      orderBy('createdAt', 'desc')
-    );
+    const q = limitCount 
+      ? query(
+          collection(db, EMPLOYEES_COLLECTION),
+          orderBy('createdAt', 'desc'),
+          orderBy('fullName'),
+          limit(limitCount)
+        )
+      : query(
+          collection(db, EMPLOYEES_COLLECTION),
+          orderBy('createdAt', 'desc')
+        );
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({
       ...employeeFromFirestore(doc.data()),

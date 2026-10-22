@@ -18,18 +18,19 @@ export const Employees = () => {
   const [showImportModal, setShowImportModal] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importResults, setImportResults] = useState<{ success: number; failed: number; skipped: number; errors: string[] } | null>(null);
+  const [displayLimit] = useState(25);
 
   const loadEmployees = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await getEmployees();
+      const data = await getEmployees(displayLimit);
       setEmployees(data);
     } catch (error) {
       console.error('Error loading employees:', error);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [displayLimit]);
 
   useEffect(() => {
     loadEmployees();

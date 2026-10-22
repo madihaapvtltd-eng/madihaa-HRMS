@@ -120,9 +120,24 @@ const employeeFromFirestore = (data: any): Employee => {
     employee.employeeId = employee.wpNo;
   }
   
+  // Map EMP ID to employeeId if employeeId is still missing
+  if (!employee.employeeId && employee['EMP ID']) {
+    employee.employeeId = employee['EMP ID'];
+  }
+  
   // Map jobLevel to designation if designation is missing
   if (!employee.designation && employee.jobLevel) {
     employee.designation = employee.jobLevel;
+  }
+  
+  // Map location to department if department is missing
+  if (!employee.department && employee.location) {
+    employee.department = employee.location;
+  }
+  
+  // Map workSite to department if department is still missing
+  if (!employee.department && employee.workSite) {
+    employee.department = employee.workSite;
   }
   
   // Map various join date field names
@@ -143,10 +158,21 @@ const employeeFromFirestore = (data: any): Employee => {
   }
   
   // If joinDate is still missing or empty object, try to infer from other date fields
-  if (!employee.joinDate || (typeof employee.joinDate === 'object' && Object.keys(employee.joinDate).length === 0)) {
+  if (!employee.joinDate || 
+      (typeof employee.joinDate === 'object' && 
+       !employee.joinDate.toDate && // Not a Firestore Timestamp
+       Object.keys(employee.joinDate).length === 0)) { // Empty object
     // Try qtaPaid as a fallback (seems to be a date field in the data)
     if (employee.qtaPaid && employee.qtaPaid !== 'N/A' && employee.qtaPaid !== '') {
       employee.joinDate = employee.qtaPaid;
+    }
+    // Try signingDate from contractDetails
+    if (employee.contractDetails?.signingDate) {
+      employee.joinDate = employee.contractDetails.signingDate;
+    }
+    // Try contractStartDate from contractDetails
+    if (employee.contractDetails?.contractStartDate) {
+      employee.joinDate = employee.contractDetails.contractStartDate;
     }
     // If still no joinDate, leave it undefined (will be handled by defaults)
   }

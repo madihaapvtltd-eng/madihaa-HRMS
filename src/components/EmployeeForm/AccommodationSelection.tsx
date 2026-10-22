@@ -44,9 +44,9 @@ export const AccommodationSelection = ({ accommodation, onNext, onPrev, onCancel
     }
 
     const accommodationData = accommodations.find(a => a.id === selectedAccommodation);
-    let floorData = accommodationData?.floors.find(f => f.id === selectedFloor);
-    let roomData = floorData?.rooms.find(r => r.id === selectedRoom);
-    let bedData = roomData?.beds.find(b => b.id === selectedBed);
+    let floorData = accommodationData?.floors.find((f: any) => f.id === selectedFloor);
+    let roomData = floorData?.rooms.find((r: any) => r.id === selectedRoom);
+    let bedData = roomData?.beds.find((b: any) => b.id === selectedBed);
 
     if (!bedData) {
       // Skip accommodation and submit
@@ -80,9 +80,9 @@ export const AccommodationSelection = ({ accommodation, onNext, onPrev, onCancel
   };
 
   const selectedAccommodationData = accommodations.find(a => a.id === selectedAccommodation);
-  const selectedFloorData = selectedAccommodationData?.floors.find(f => f.id === selectedFloor);
-  const selectedRoomData = selectedFloorData?.rooms.find(r => r.id === selectedRoom);
-  const selectedBedData = selectedRoomData?.beds.find(b => b.id === selectedBed);
+  const selectedFloorData = selectedAccommodationData?.floors.find((f: any) => f.id === selectedFloor);
+  const selectedRoomData = selectedFloorData?.rooms.find((r: any) => r.id === selectedRoom);
+  const selectedBedData = selectedRoomData?.beds.find((b: any) => b.id === selectedBed);
 
   if (loading) {
     return (

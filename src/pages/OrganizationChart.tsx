@@ -75,7 +75,7 @@ const OrgTreeNode = ({ node, level = 0 }: { node: OrgNode; level?: number }) => 
             
             {/* Children */}
             <div className="flex gap-8 pt-4">
-              {node.children.map((child, index) => (
+              {node.children.map((child) => (
                 <div key={child.id} className="flex flex-col items-center">
                   {/* Vertical line from horizontal to child */}
                   <div className="w-0.5 h-4 bg-primary-300"></div>

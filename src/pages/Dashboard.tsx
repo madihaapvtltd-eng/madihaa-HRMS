@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Users, Calendar, DollarSign, Clock, TrendingUp, AlertCircle, Briefcase, Building2, X } from 'lucide-react';
+import { Users, Clock, TrendingUp, AlertCircle, Briefcase, Building2, X } from 'lucide-react';
 import { Card, CardHeader, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { getEmployees } from '../lib/employees';
@@ -48,12 +48,6 @@ export const Dashboard = () => {
     return acc;
   }, {} as Record<string, number>);
 
-  // Group by work location
-  const workLocations = employees.reduce((acc, emp) => {
-    const loc = emp.workLocation || emp.workSite || 'Unassigned';
-    acc[loc] = (acc[loc] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
 
   const stats = [
     { name: 'Total Employees', value: totalEmployees.toString(), icon: Users, color: 'bg-blue-500', filter: 'all' },
@@ -62,7 +56,7 @@ export const Dashboard = () => {
     { name: 'Resigned', value: resignedEmployees.toString(), icon: AlertCircle, color: 'bg-red-500', filter: 'resigned' },
   ];
 
-  const positionStats = Object.entries(positions)
+  const positionStats = (Object.entries(positions) as [string, number][])
     .sort(([, a], [, b]) => b - a)
     .slice(0, 6)
     .map(([name, count]) => ({
@@ -74,7 +68,7 @@ export const Dashboard = () => {
       filterValue: name
     }));
 
-  const departmentStats = Object.entries(departments)
+  const departmentStats = (Object.entries(departments) as [string, number][])
     .sort(([, a], [, b]) => b - a)
     .slice(0, 6)
     .map(([name, count]) => ({
@@ -135,11 +129,11 @@ export const Dashboard = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.1 }}
           >
-            <Card 
-              hover 
+            <div 
               className="cursor-pointer group"
               onClick={() => handleStatClick(stat)}
             >
+              <Card hover className="group">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
@@ -153,6 +147,7 @@ export const Dashboard = () => {
                 </div>
               </CardContent>
             </Card>
+            </div>
           </motion.div>
         ))}
       </div>
@@ -168,11 +163,11 @@ export const Dashboard = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.05 }}
             >
-              <Card 
-                hover 
+              <div 
                 className="cursor-pointer group"
                 onClick={() => handleStatClick(stat)}
               >
+              <Card hover className="group">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div className="flex-1 min-w-0">
@@ -185,6 +180,7 @@ export const Dashboard = () => {
                   </div>
                 </CardContent>
               </Card>
+              </div>
             </motion.div>
           ))}
         </div>
@@ -201,11 +197,11 @@ export const Dashboard = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.05 }}
             >
-              <Card 
-                hover 
+              <div 
                 className="cursor-pointer group"
                 onClick={() => handleStatClick(stat)}
               >
+              <Card hover className="group">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div className="flex-1 min-w-0">
@@ -218,6 +214,7 @@ export const Dashboard = () => {
                   </div>
                 </CardContent>
               </Card>
+              </div>
             </motion.div>
           ))}
         </div>

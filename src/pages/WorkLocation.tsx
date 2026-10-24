@@ -187,20 +187,6 @@ export const WorkLocationPage = () => {
     );
   };
 
-  const handleRemoveStaff = async (locationId: string, staffId: string) => {
-    try {
-      const location = await getWorkLocation(locationId);
-      if (location) {
-        const updatedStaff = (location.assignedStaff || []).filter(id => id !== staffId);
-        await assignStaffToWorkLocation(locationId, updatedStaff);
-        loadData();
-      }
-    } catch (error) {
-      console.error('Error removing staff:', error);
-      alert('Failed to remove staff');
-    }
-  };
-
   const handleBulkAssign = async () => {
     if (!bulkSelectedLocation || bulkSelectedStaff.length === 0) {
       alert('Please select a work location and at least one staff member');
@@ -361,7 +347,7 @@ export const WorkLocationPage = () => {
                 <div className="mb-4">
                   <p className="text-xs text-secondary-500 font-medium mb-2">Top Positions:</p>
                   <div className="space-y-2">
-                    {location.topPositions.map(([position, count]: [string, number]) => (
+                    {(location.topPositions as [string, number][]).map(([position, count]) => (
                       <div key={position} className="flex items-center justify-between text-xs">
                         <span className="text-secondary-700 truncate flex-1">{position}</span>
                         <span className="text-secondary-900 font-semibold ml-2">{count}</span>
@@ -728,9 +714,9 @@ export const WorkLocationPage = () => {
                 <h3 className="text-sm font-medium text-secondary-700 mb-3">All Positions</h3>
                 <div className="bg-secondary-50 rounded-lg p-4">
                   <div className="space-y-2">
-                    {Object.entries(detailsLocation.positions)
-                      .sort(([, a], [, b]) => (b as number) - (a as number))
-                      .map(([position, count]: [string, number]) => (
+                    {(Object.entries(detailsLocation.positions) as [string, number][])
+                      .sort(([, a], [, b]) => b - a)
+                      .map(([position, count]) => (
                         <div key={position} className="flex items-center justify-between text-sm">
                           <span className="text-secondary-700">{position}</span>
                           <span className="text-secondary-900 font-semibold">{count}</span>

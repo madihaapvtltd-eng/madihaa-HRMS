@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Plus, MapPin, Users, Trash2, Edit2, X } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Plus, MapPin, Users, Trash2, Edit2, X, Briefcase } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Card, CardHeader, CardContent } from '../components/ui/Card';
 import type { WorkLocation } from '../types';
@@ -27,6 +27,11 @@ export const WorkLocationPage = () => {
   const [bulkSelectedStaff, setBulkSelectedStaff] = useState<string[]>([]);
   const [bulkSelectedLocation, setBulkSelectedLocation] = useState<string>('');
   const [bulkSearchTerm, setBulkSearchTerm] = useState('');
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [detailsLocation, setDetailsLocation] = useState<any>(null);
+  const [showMoveModal, setShowMoveModal] = useState(false);
+  const [moveSelectedStaff, setMoveSelectedStaff] = useState<string[]>([]);
+  const [moveTargetLocation, setMoveTargetLocation] = useState<string>('');
   
   const [formData, setFormData] = useState({
     name: '',
@@ -34,6 +39,32 @@ export const WorkLocationPage = () => {
     address: '',
     assignedStaff: [] as string[]
   });
+
+  // Calculate statistics for each work location
+  const locationStats = useMemo(() => {
+    return workLocations.map(location => {
+      const assignedEmployees = employees.filter(emp => 
+        location.assignedStaff?.includes(emp.id)
+      );
+      
+      const positions = assignedEmployees.reduce((acc, emp) => {
+        const position = emp.designation || 'Unknown';
+        acc[position] = (acc[position] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      
+      const topPositions = Object.entries(positions)
+        .sort(([, a], [, b]) => (b as number) - (a as number))
+        .slice(0, 3);
+      
+      return {
+        ...location,
+        totalStaff: assignedEmployees.length,
+        positions,
+        topPositions
+      };
+    });
+  }, [workLocations, employees]);
 
   useEffect(() => {
     loadData();
@@ -193,6 +224,47 @@ export const WorkLocationPage = () => {
     }
   };
 
+  const handleViewDetails = (location: any) => {
+    setDetailsLocation(location);
+    setShowDetailsModal(true);
+  };
+
+  const handleMoveStaff = async () => {
+    if (!moveTargetLocation || moveSelectedStaff.length === 0) {
+      alert('Please select a target location and at least one staff member');
+      return;
+    }
+    
+    try {
+      // Remove staff from current location
+      const currentLocation = await getWorkLocation(detailsLocation.id);
+      if (currentLocation) {
+        const currentStaff = currentLocation.assignedStaff || [];
+        const updatedCurrentStaff = currentStaff.filter((id: string) => !moveSelectedStaff.includes(id));
+        await assignStaffToWorkLocation(detailsLocation.id, updatedCurrentStaff);
+      }
+      
+      // Add staff to target location
+      const targetLocation = await getWorkLocation(moveTargetLocation);
+      if (targetLocation) {
+        const targetStaff = targetLocation.assignedStaff || [];
+        const updatedTargetStaff = [...targetStaff, ...moveSelectedStaff];
+        await assignStaffToWorkLocation(moveTargetLocation, updatedTargetStaff);
+      }
+      
+      setShowMoveModal(false);
+      setMoveSelectedStaff([]);
+      setMoveTargetLocation('');
+      loadData();
+      // Refresh details modal
+      const updatedLocation = locationStats.find(loc => loc.id === detailsLocation.id);
+      setDetailsLocation(updatedLocation);
+    } catch (error) {
+      console.error('Error moving staff:', error);
+      alert('Failed to move staff');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -223,21 +295,26 @@ export const WorkLocationPage = () => {
 
       {/* Work Locations Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {workLocations.map((location) => (
-          <Card key={location.id} className="hover:shadow-lg transition-shadow">
-            <CardHeader className="flex flex-row items-start justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-primary-100 rounded-lg">
-                  <MapPin className="w-5 h-5 text-primary-600" />
+        {locationStats.map((location) => (
+          <Card key={location.id} className="group relative bg-gradient-to-br from-white to-gray-50 hover:shadow-xl transition-all duration-300 border border-gray-100 hover:border-primary-200 overflow-hidden">
+            {/* Decorative gradient accent */}
+            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-primary-500/10 to-primary-600/5 rounded-bl-full -mr-16 -mt-16 transition-all duration-300 group-hover:from-primary-500/20 group-hover:to-primary-600/10" />
+            
+            <CardHeader className="flex flex-row items-start justify-between relative">
+              <div className="flex items-center gap-4">
+                <div className="flex-shrink-0 w-14 h-14 bg-gradient-to-br from-primary-100 to-primary-200 rounded-2xl p-3 shadow-lg">
+                  <MapPin className="w-8 h-8 text-primary-600" />
                 </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-secondary-900">{location.name}</h3>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-xl font-bold text-secondary-900 group-hover:text-primary-600 transition-colors truncate">
+                    {location.name}
+                  </h3>
                   {location.address && (
-                    <p className="text-sm text-secondary-600">{location.address}</p>
+                    <p className="text-sm text-secondary-600 mt-1 truncate">{location.address}</p>
                   )}
                 </div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-1">
                 <button
                   onClick={() => handleEdit(location)}
                   className="p-2 hover:bg-secondary-100 rounded-lg transition-colors"
@@ -252,45 +329,66 @@ export const WorkLocationPage = () => {
                 </button>
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="relative">
               {location.description && (
-                <p className="text-sm text-secondary-600 mb-4">{location.description}</p>
+                <p className="text-sm text-secondary-600 mb-4 line-clamp-2">{location.description}</p>
               )}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm text-secondary-600">
-                  <Users className="w-4 h-4" />
-                  <span>{location.assignedStaff?.length || 0} staff assigned</span>
+              
+              {/* Stats Row */}
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div className="flex items-center gap-2 bg-blue-50 rounded-lg p-3">
+                  <div className="p-1.5 bg-blue-100 rounded-lg">
+                    <Users className="w-4 h-4 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-secondary-500 font-medium">Total Staff</p>
+                    <p className="text-lg font-bold text-secondary-900">{location.totalStaff}</p>
+                  </div>
                 </div>
+                <div className="flex items-center gap-2 bg-purple-50 rounded-lg p-3">
+                  <div className="p-1.5 bg-purple-100 rounded-lg">
+                    <Briefcase className="w-4 h-4 text-purple-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-secondary-500 font-medium">Positions</p>
+                    <p className="text-lg font-bold text-secondary-900">{Object.keys(location.positions).length}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Top Positions */}
+              {location.topPositions.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-xs text-secondary-500 font-medium mb-2">Top Positions:</p>
+                  <div className="space-y-2">
+                    {location.topPositions.map(([position, count]: [string, number]) => (
+                      <div key={position} className="flex items-center justify-between text-xs">
+                        <span className="text-secondary-700 truncate flex-1">{position}</span>
+                        <span className="text-secondary-900 font-semibold ml-2">{count}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between pt-3 border-t border-gray-200 gap-2">
                 <Button
                   variant="secondary"
                   size="sm"
                   onClick={() => handleAssignStaff(location)}
+                  className="shadow-sm flex-1"
                 >
                   Assign Staff
                 </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => handleViewDetails(location)}
+                  className="shadow-sm flex-1"
+                >
+                  View Details
+                </Button>
               </div>
-              {location.assignedStaff && location.assignedStaff.length > 0 && (
-                <div className="mt-4 pt-4 border-t border-secondary-200">
-                  <p className="text-xs text-secondary-500 mb-2">Assigned Staff:</p>
-                  <div className="flex flex-wrap gap-2">
-                    {location.assignedStaff.map((staffId: string) => {
-                      const emp = employees.find(e => e.id === staffId);
-                      return emp ? (
-                        <span key={staffId} className="text-xs bg-secondary-100 text-secondary-700 px-2 py-1 rounded flex items-center gap-1">
-                          {emp.fullName}
-                          <button
-                            onClick={() => handleRemoveStaff(location.id!, staffId)}
-                            className="ml-1 hover:text-red-600 transition-colors"
-                            title="Unassign"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </span>
-                      ) : null;
-                    })}
-                  </div>
-                </div>
-              )}
             </CardContent>
           </Card>
         ))}
@@ -563,6 +661,250 @@ export const WorkLocationPage = () => {
                 </Button>
                 <Button onClick={handleBulkAssign} className="flex-1">
                   Assign Staff
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* View Details Modal */}
+      {showDetailsModal && detailsLocation && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-primary-100 rounded-lg">
+                    <MapPin className="w-5 h-5 text-primary-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-semibold text-secondary-900">{detailsLocation.name}</h2>
+                    {detailsLocation.address && (
+                      <p className="text-sm text-secondary-600">{detailsLocation.address}</p>
+                    )}
+                  </div>
+                </div>
+                <button
+                  onClick={() => { setShowDetailsModal(false); setDetailsLocation(null); }}
+                  className="p-2 hover:bg-secondary-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-secondary-600" />
+                </button>
+              </div>
+            </CardHeader>
+            <CardContent className="flex-1 overflow-y-auto">
+              {detailsLocation.description && (
+                <div className="mb-6">
+                  <h3 className="text-sm font-medium text-secondary-700 mb-2">Description</h3>
+                  <p className="text-sm text-secondary-600">{detailsLocation.description}</p>
+                </div>
+              )}
+
+              {/* Statistics */}
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                <div className="bg-blue-50 rounded-lg p-4">
+                  <div className="flex items-center gap-2">
+                    <Users className="w-5 h-5 text-blue-600" />
+                    <div>
+                      <p className="text-xs text-secondary-500">Total Staff</p>
+                      <p className="text-2xl font-bold text-secondary-900">{detailsLocation.totalStaff}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-purple-50 rounded-lg p-4">
+                  <div className="flex items-center gap-2">
+                    <Briefcase className="w-5 h-5 text-purple-600" />
+                    <div>
+                      <p className="text-xs text-secondary-500">Positions</p>
+                      <p className="text-2xl font-bold text-secondary-900">{Object.keys(detailsLocation.positions).length}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* All Positions */}
+              <div className="mb-6">
+                <h3 className="text-sm font-medium text-secondary-700 mb-3">All Positions</h3>
+                <div className="bg-secondary-50 rounded-lg p-4">
+                  <div className="space-y-2">
+                    {Object.entries(detailsLocation.positions)
+                      .sort(([, a], [, b]) => (b as number) - (a as number))
+                      .map(([position, count]: [string, number]) => (
+                        <div key={position} className="flex items-center justify-between text-sm">
+                          <span className="text-secondary-700">{position}</span>
+                          <span className="text-secondary-900 font-semibold">{count}</span>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Assigned Staff */}
+              {detailsLocation.assignedStaff && detailsLocation.assignedStaff.length > 0 && (
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-medium text-secondary-700">Assigned Staff ({detailsLocation.assignedStaff.length})</h3>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => { setShowMoveModal(true); setMoveSelectedStaff([]); setMoveTargetLocation(''); }}
+                    >
+                      Move Staff
+                    </Button>
+                  </div>
+                  <div className="space-y-2">
+                    {detailsLocation.assignedStaff.map((staffId: string) => {
+                      const emp = employees.find(e => e.id === staffId);
+                      return emp ? (
+                        <div key={staffId} className="flex items-center gap-3 p-3 bg-secondary-50 rounded-lg">
+                          {emp.photo ? (
+                            <img
+                              src={emp.photo}
+                              alt={emp.fullName}
+                              className="w-10 h-10 rounded-full object-cover"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display = 'none';
+                              }}
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center">
+                              <Users className="w-5 h-5 text-primary-600" />
+                            </div>
+                          )}
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-secondary-900">{emp.fullName}</p>
+                            <p className="text-xs text-secondary-600">{emp.employeeId}</p>
+                          </div>
+                          <div className="flex gap-2">
+                            {emp.designation && (
+                              <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">
+                                {emp.designation}
+                              </span>
+                            )}
+                            {emp.department && (
+                              <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded">
+                                {emp.department}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ) : null;
+                    })}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+            <CardContent className="border-t border-secondary-200 pt-4">
+              <Button
+                variant="secondary"
+                onClick={() => { setShowDetailsModal(false); setDetailsLocation(null); }}
+                className="w-full"
+              >
+                Close
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Move Staff Modal */}
+      {showMoveModal && detailsLocation && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-semibold text-secondary-900">Move Staff</h2>
+                <button
+                  onClick={() => { setShowMoveModal(false); setMoveSelectedStaff([]); setMoveTargetLocation(''); }}
+                  className="p-2 hover:bg-secondary-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-secondary-600" />
+                </button>
+              </div>
+            </CardHeader>
+            <CardContent className="flex-1 overflow-y-auto">
+              {/* Select Staff to Move */}
+              <div className="mb-6">
+                <h3 className="text-sm font-medium text-secondary-700 mb-3">Select Staff to Move</h3>
+                <div className="max-h-48 overflow-y-auto space-y-2">
+                  {detailsLocation.assignedStaff && detailsLocation.assignedStaff.map((staffId: string) => {
+                    const emp = employees.find(e => e.id === staffId);
+                    return emp ? (
+                      <label
+                        key={staffId}
+                        className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
+                          moveSelectedStaff.includes(staffId)
+                            ? 'bg-primary-50 border-2 border-primary-500'
+                            : 'bg-secondary-50 border-2 border-transparent hover:bg-secondary-100'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={moveSelectedStaff.includes(staffId)}
+                          onChange={() => {
+                            setMoveSelectedStaff(prev => 
+                              prev.includes(staffId)
+                                ? prev.filter(id => id !== staffId)
+                                : [...prev, staffId]
+                            );
+                          }}
+                          className="w-4 h-4 text-primary-600 rounded"
+                        />
+                        {emp.photo ? (
+                          <img
+                            src={emp.photo}
+                            alt={emp.fullName}
+                            className="w-8 h-8 rounded-full object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none';
+                            }}
+                          />
+                        ) : (
+                          <div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center">
+                            <Users className="w-4 h-4 text-primary-600" />
+                          </div>
+                        )}
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-secondary-900">{emp.fullName}</p>
+                          <p className="text-xs text-secondary-600">{emp.employeeId}</p>
+                        </div>
+                      </label>
+                    ) : null;
+                  })}
+                </div>
+              </div>
+
+              {/* Select Target Location */}
+              <div>
+                <h3 className="text-sm font-medium text-secondary-700 mb-3">Select Target Location</h3>
+                <select
+                  value={moveTargetLocation}
+                  onChange={(e) => setMoveTargetLocation(e.target.value)}
+                  className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="">Select a location...</option>
+                  {workLocations
+                    .filter(loc => loc.id !== detailsLocation.id)
+                    .map(loc => (
+                      <option key={loc.id} value={loc.id}>
+                        {loc.name}
+                      </option>
+                    ))}
+                </select>
+              </div>
+            </CardContent>
+            <CardContent className="border-t border-secondary-200 pt-4">
+              <div className="flex gap-3">
+                <Button
+                  variant="secondary"
+                  onClick={() => { setShowMoveModal(false); setMoveSelectedStaff([]); setMoveTargetLocation(''); }}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button onClick={handleMoveStaff} className="flex-1">
+                  Move Staff ({moveSelectedStaff.length})
                 </Button>
               </div>
             </CardContent>

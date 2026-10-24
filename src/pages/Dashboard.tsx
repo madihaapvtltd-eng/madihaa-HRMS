@@ -1,18 +1,123 @@
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Users, Calendar, DollarSign, Clock, TrendingUp, AlertCircle } from 'lucide-react';
+import { Users, Calendar, DollarSign, Clock, TrendingUp, AlertCircle, Briefcase, Building2, X } from 'lucide-react';
 import { Card, CardHeader, CardContent } from '../components/ui/Card';
+import { Button } from '../components/ui/Button';
+import { getEmployees } from '../lib/employees';
+import { useNavigate } from 'react-router-dom';
 
 export const Dashboard = () => {
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedStat, setSelectedStat] = useState<string | null>(null);
+  const [filteredEmployees, setFilteredEmployees] = useState<any[]>([]);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    loadEmployees();
+  }, []);
+
+  const loadEmployees = async () => {
+    try {
+      const data = await getEmployees();
+      setEmployees(data);
+    } catch (error) {
+      console.error('Error loading employees:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Calculate statistics
+  const totalEmployees = employees.length;
+  const activeEmployees = employees.filter(e => e.status === 'active').length;
+  const onLeaveEmployees = employees.filter(e => e.status === 'on_leave').length;
+  const resignedEmployees = employees.filter(e => e.status === 'resigned').length;
+
+  // Group by position/designation
+  const positions = employees.reduce((acc, emp) => {
+    const position = emp.designation || 'Unknown';
+    acc[position] = (acc[position] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  // Group by department
+  const departments = employees.reduce((acc, emp) => {
+    const dept = emp.department || 'Unknown';
+    acc[dept] = (acc[dept] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  // Group by work location
+  const workLocations = employees.reduce((acc, emp) => {
+    const loc = emp.workLocation || emp.workSite || 'Unassigned';
+    acc[loc] = (acc[loc] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
   const stats = [
-    { name: 'Total Employees', value: '0', icon: Users, change: '0%', color: 'bg-blue-500' },
-    { name: 'Present Today', value: '0', icon: Calendar, change: '0%', color: 'bg-green-500' },
-    { name: 'On Leave', value: '0', icon: Clock, change: '0%', color: 'bg-yellow-500' },
-    { name: 'Payroll This Month', value: 'MVR 0', icon: DollarSign, change: '0%', color: 'bg-purple-500' },
+    { name: 'Total Employees', value: totalEmployees.toString(), icon: Users, color: 'bg-blue-500', filter: 'all' },
+    { name: 'Active Staff', value: activeEmployees.toString(), icon: Users, color: 'bg-green-500', filter: 'active' },
+    { name: 'On Leave', value: onLeaveEmployees.toString(), icon: Clock, color: 'bg-yellow-500', filter: 'on_leave' },
+    { name: 'Resigned', value: resignedEmployees.toString(), icon: AlertCircle, color: 'bg-red-500', filter: 'resigned' },
   ];
+
+  const positionStats = Object.entries(positions)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 6)
+    .map(([name, count]) => ({
+      name,
+      value: count.toString(),
+      icon: Briefcase,
+      color: 'bg-purple-500',
+      filter: 'position',
+      filterValue: name
+    }));
+
+  const departmentStats = Object.entries(departments)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 6)
+    .map(([name, count]) => ({
+      name,
+      value: count.toString(),
+      icon: Building2,
+      color: 'bg-indigo-500',
+      filter: 'department',
+      filterValue: name
+    }));
+
+  const handleStatClick = (stat: any) => {
+    if (stat.filter === 'all') {
+      setFilteredEmployees(employees);
+    } else if (stat.filter === 'active') {
+      setFilteredEmployees(employees.filter(e => e.status === 'active'));
+    } else if (stat.filter === 'on_leave') {
+      setFilteredEmployees(employees.filter(e => e.status === 'on_leave'));
+    } else if (stat.filter === 'resigned') {
+      setFilteredEmployees(employees.filter(e => e.status === 'resigned'));
+    } else if (stat.filter === 'position') {
+      setFilteredEmployees(employees.filter(e => e.designation === stat.filterValue));
+    } else if (stat.filter === 'department') {
+      setFilteredEmployees(employees.filter(e => e.department === stat.filterValue));
+    }
+    setSelectedStat(stat.name);
+  };
+
+  const handleViewInEmployees = () => {
+    navigate('/employees');
+  };
 
   const recentActivities: any[] = [];
 
   const upcomingEvents: any[] = [];
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-secondary-600">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -30,15 +135,19 @@ export const Dashboard = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.1 }}
           >
-            <Card hover>
+            <Card 
+              hover 
+              className="cursor-pointer group"
+              onClick={() => handleStatClick(stat)}
+            >
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-secondary-600">{stat.name}</p>
                     <p className="text-2xl font-bold text-secondary-900 mt-1">{stat.value}</p>
-                    <p className="text-sm text-green-600 mt-1">{stat.change} from last month</p>
+                    <p className="text-xs text-primary-600 mt-1 group-hover:underline">Click to view</p>
                   </div>
-                  <div className={`p-3 rounded-lg ${stat.color}`}>
+                  <div className={`p-3 rounded-lg ${stat.color} group-hover:scale-110 transition-transform`}>
                     <stat.icon className="w-6 h-6 text-white" />
                   </div>
                 </div>
@@ -46,6 +155,72 @@ export const Dashboard = () => {
             </Card>
           </motion.div>
         ))}
+      </div>
+
+      {/* Positions Grid */}
+      <div>
+        <h2 className="text-xl font-semibold text-secondary-900 mb-4">Staff by Position</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {positionStats.map((stat, index) => (
+            <motion.div
+              key={stat.name}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.05 }}
+            >
+              <Card 
+                hover 
+                className="cursor-pointer group"
+                onClick={() => handleStatClick(stat)}
+              >
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-secondary-600 truncate">{stat.name}</p>
+                      <p className="text-xl font-bold text-secondary-900 mt-1">{stat.value}</p>
+                    </div>
+                    <div className={`p-2 rounded-lg ${stat.color} group-hover:scale-110 transition-transform ml-3`}>
+                      <stat.icon className="w-5 h-5 text-white" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+
+      {/* Departments Grid */}
+      <div>
+        <h2 className="text-xl font-semibold text-secondary-900 mb-4">Staff by Department</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {departmentStats.map((stat, index) => (
+            <motion.div
+              key={stat.name}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.05 }}
+            >
+              <Card 
+                hover 
+                className="cursor-pointer group"
+                onClick={() => handleStatClick(stat)}
+              >
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-secondary-600 truncate">{stat.name}</p>
+                      <p className="text-xl font-bold text-secondary-900 mt-1">{stat.value}</p>
+                    </div>
+                    <div className={`p-2 rounded-lg ${stat.color} group-hover:scale-110 transition-transform ml-3`}>
+                      <stat.icon className="w-5 h-5 text-white" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          ))}
+        </div>
       </div>
 
       {/* Charts and Activity Section */}
@@ -116,6 +291,101 @@ export const Dashboard = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Filtered Employees Modal */}
+      {selectedStat && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-semibold text-secondary-900">
+                    {selectedStat}
+                  </h2>
+                  <p className="text-sm text-secondary-600 mt-1">
+                    {filteredEmployees.length} employees
+                  </p>
+                </div>
+                <button
+                  onClick={() => { setSelectedStat(null); setFilteredEmployees([]); }}
+                  className="p-2 hover:bg-secondary-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-secondary-600" />
+                </button>
+              </div>
+            </CardHeader>
+            <CardContent className="flex-1 overflow-y-auto">
+              <div className="space-y-2">
+                {filteredEmployees.map((employee) => (
+                  <div
+                    key={employee.id}
+                    className="flex items-center gap-4 p-4 bg-secondary-50 rounded-lg hover:bg-secondary-100 transition-colors"
+                  >
+                    {employee.photo ? (
+                      <img
+                        src={employee.photo}
+                        alt={employee.fullName}
+                        className="w-12 h-12 rounded-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      <div className="w-12 h-12 rounded-full bg-primary-100 flex items-center justify-center">
+                        <Users className="w-6 h-6 text-primary-600" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-secondary-900">{employee.fullName}</p>
+                      <p className="text-sm text-secondary-600">{employee.employeeId}</p>
+                      <div className="flex gap-2 mt-1">
+                        {employee.designation && (
+                          <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded">
+                            {employee.designation}
+                          </span>
+                        )}
+                        {employee.department && (
+                          <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded">
+                            {employee.department}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <span className={`px-3 py-1 text-xs font-medium rounded-full ${
+                      employee.status === 'active' 
+                        ? 'bg-green-100 text-green-700' :
+                      employee.status === 'on_leave' 
+                        ? 'bg-yellow-100 text-yellow-700' :
+                      'bg-red-100 text-red-700'
+                    }`}>
+                      {employee.status?.replace('_', ' ').toUpperCase()}
+                    </span>
+                  </div>
+                ))}
+                {filteredEmployees.length === 0 && (
+                  <div className="text-center py-8">
+                    <p className="text-secondary-600">No employees found</p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+            <CardContent className="border-t border-secondary-200 pt-4">
+              <div className="flex gap-3">
+                <Button
+                  variant="secondary"
+                  onClick={() => { setSelectedStat(null); setFilteredEmployees([]); }}
+                  className="flex-1"
+                >
+                  Close
+                </Button>
+                <Button onClick={handleViewInEmployees} className="flex-1">
+                  View in Employees Page
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Calendar, Clock, RefreshCw, Download, ArrowRight, ArrowLeft, Upload } from 'lucide-react';
+import { Calendar, Clock, RefreshCw, Download, ArrowRight, ArrowLeft, Upload, MapPin } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Card, CardHeader, CardContent } from '../components/ui/Card';
 import { getAttendanceStats, getTodayAttendanceForEmployee, checkIn, checkOut, requestAttendanceAdjustment } from '../lib/attendance';
 import { useAuth } from '../contexts/AuthContext';
+import { getEmployees } from '../lib/employees';
+import { getAllWorkLocations } from '../lib/workLocation';
 import * as XLSX from 'xlsx';
 
 export const Attendance = () => {
@@ -27,6 +29,8 @@ export const Attendance = () => {
   const [adjustmentSuccess, setAdjustmentSuccess] = useState('');
   const [attendanceData, setAttendanceData] = useState<any[]>([]);
   const [loadingAttendance, setLoadingAttendance] = useState(false);
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [workLocations, setWorkLocations] = useState<any[]>([]);
 
   const loadTodayStats = useCallback(async () => {
     try {
@@ -51,9 +55,23 @@ export const Attendance = () => {
   useEffect(() => {
     loadTodayStats();
     loadTodayAttendance();
+    loadEmployeesAndLocations();
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, [loadTodayStats, loadTodayAttendance]);
+
+  const loadEmployeesAndLocations = async () => {
+    try {
+      const [empData, locData] = await Promise.all([
+        getEmployees(),
+        getAllWorkLocations()
+      ]);
+      setEmployees(empData);
+      setWorkLocations(locData);
+    } catch (error) {
+      console.error('Error loading employees and locations:', error);
+    }
+  };
 
   const handleCheckIn = async () => {
     if (!user?.employeeId) {
@@ -189,7 +207,7 @@ export const Attendance = () => {
       }
     });
     
-    // Check if first punch is after 8:30 AM
+    // Check if first punch is after 8:30 AM and match with work location
     employeeMap.forEach((empData) => {
       if (empData.firstPunch) {
         const firstPunchDate = new Date(empData.firstPunch);
@@ -199,6 +217,26 @@ export const Attendance = () => {
         if (hours > 8 || (hours === 8 && minutes > 30)) {
           empData.isLate = true;
         }
+      }
+      
+      // Match employee with work location
+      const employee = employees.find(emp => 
+        emp.employeeId === empData.empId || 
+        emp.fullName?.toLowerCase() === empData.name?.toLowerCase()
+      );
+      
+      if (employee) {
+        // Find work location for this employee
+        const location = workLocations.find(loc => 
+          loc.assignedStaff?.includes(employee.id)
+        );
+        empData.workLocation = location?.name || 'Unassigned';
+        empData.workLocationId = location?.id;
+        empData.employeeId = employee.id;
+      } else {
+        empData.workLocation = 'Not Found';
+        empData.workLocationId = null;
+        empData.employeeId = null;
       }
     });
     
@@ -453,39 +491,64 @@ export const Attendance = () => {
               Loading attendance data...
             </div>
           ) : attendanceData.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-secondary-200">
-                    <th className="text-left py-3 px-4 text-sm font-medium text-secondary-700">Employee ID</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-secondary-700">Name</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-secondary-700">Department</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-secondary-700">First Punch</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-secondary-700">Last Punch</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-secondary-700">Total Punches</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {attendanceData.map((emp, index) => (
-                    <tr 
-                      key={index} 
-                      className={`border-b border-secondary-100 hover:bg-secondary-50 ${emp.isLate ? 'bg-red-50' : ''}`}
-                    >
-                      <td className="py-3 px-4 text-sm text-secondary-900">{emp.empId}</td>
-                      <td className="py-3 px-4 text-sm text-secondary-900">{emp.name}</td>
-                      <td className="py-3 px-4 text-sm text-secondary-900">{emp.department}</td>
-                      <td className={`py-3 px-4 text-sm ${emp.isLate ? 'text-red-600 font-semibold' : 'text-secondary-900'}`}>
-                        {emp.firstPunch ? new Date(emp.firstPunch).toLocaleString() : 'N/A'}
-                        {emp.isLate && <span className="ml-2 text-xs bg-red-100 text-red-700 px-2 py-1 rounded">Late</span>}
-                      </td>
-                      <td className="py-3 px-4 text-sm text-secondary-900">
-                        {emp.lastPunch ? new Date(emp.lastPunch).toLocaleString() : 'N/A'}
-                      </td>
-                      <td className="py-3 px-4 text-sm text-secondary-900">{emp.totalPunches}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="space-y-6">
+              {/* Group by Work Location */}
+              {(() => {
+                const groupedByLocation = attendanceData.reduce((acc, emp) => {
+                  const location = emp.workLocation || 'Unassigned';
+                  if (!acc[location]) {
+                    acc[location] = [];
+                  }
+                  acc[location].push(emp);
+                  return acc;
+                }, {} as Record<string, any[]>);
+
+                return Object.entries(groupedByLocation).map(([location, emps]) => (
+                  <div key={location} className="border border-secondary-200 rounded-lg overflow-hidden">
+                    <div className="bg-gradient-to-r from-primary-50 to-primary-100 px-4 py-3 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <MapPin className="w-5 h-5 text-primary-600" />
+                        <h3 className="font-semibold text-primary-900">{location}</h3>
+                      </div>
+                      <span className="text-sm text-primary-700 font-medium">{(emps as any[]).length} employees</span>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b border-secondary-200 bg-secondary-50">
+                            <th className="text-left py-3 px-4 text-sm font-medium text-secondary-700">Employee ID</th>
+                            <th className="text-left py-3 px-4 text-sm font-medium text-secondary-700">Name</th>
+                            <th className="text-left py-3 px-4 text-sm font-medium text-secondary-700">Department</th>
+                            <th className="text-left py-3 px-4 text-sm font-medium text-secondary-700">First Punch</th>
+                            <th className="text-left py-3 px-4 text-sm font-medium text-secondary-700">Last Punch</th>
+                            <th className="text-left py-3 px-4 text-sm font-medium text-secondary-700">Total Punches</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(emps as any[]).map((emp: any, index: number) => (
+                            <tr 
+                              key={index} 
+                              className={`border-b border-secondary-100 hover:bg-secondary-50 ${emp.isLate ? 'bg-red-50' : ''}`}
+                            >
+                              <td className="py-3 px-4 text-sm text-secondary-900">{emp.empId}</td>
+                              <td className="py-3 px-4 text-sm text-secondary-900">{emp.name}</td>
+                              <td className="py-3 px-4 text-sm text-secondary-900">{emp.department}</td>
+                              <td className={`py-3 px-4 text-sm ${emp.isLate ? 'text-red-600 font-semibold' : 'text-secondary-900'}`}>
+                                {emp.firstPunch ? new Date(emp.firstPunch).toLocaleString() : 'N/A'}
+                                {emp.isLate && <span className="ml-2 text-xs bg-red-100 text-red-700 px-2 py-1 rounded">Late</span>}
+                              </td>
+                              <td className="py-3 px-4 text-sm text-secondary-900">
+                                {emp.lastPunch ? new Date(emp.lastPunch).toLocaleString() : 'N/A'}
+                              </td>
+                              <td className="py-3 px-4 text-sm text-secondary-900">{emp.totalPunches}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ));
+              })()}
             </div>
           ) : (
             <div className="text-center py-12 text-secondary-600">

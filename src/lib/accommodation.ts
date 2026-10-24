@@ -125,23 +125,30 @@ export const getAccommodations = async (): Promise<Accommodation[]> => {
     const querySnapshot = await getDocs(collection(db, ACCOMMODATIONS_COLLECTION));
     const accommodations = querySnapshot.docs.map(doc => fromFirestore({ id: doc.id, ...doc.data() })) as Accommodation[];
     
-    // Load floors, rooms, and beds for each accommodation
+    // Load all floors in parallel
+    const floorsQuery = query(collection(db, FLOORS_COLLECTION));
+    const floorsSnapshot = await getDocs(floorsQuery);
+    const allFloors = floorsSnapshot.docs.map(doc => fromFirestore({ id: doc.id, ...doc.data() })) as Floor[];
+    
+    // Load all rooms in parallel
+    const roomsQuery = query(collection(db, ROOMS_COLLECTION));
+    const roomsSnapshot = await getDocs(roomsQuery);
+    const allRooms = roomsSnapshot.docs.map(doc => fromFirestore({ id: doc.id, ...doc.data() })) as Room[];
+    
+    // Load all beds in parallel
+    const bedsQuery = query(collection(db, BEDS_COLLECTION));
+    const bedsSnapshot = await getDocs(bedsQuery);
+    const allBeds = bedsSnapshot.docs.map(doc => fromFirestore({ id: doc.id, ...doc.data() })) as Bed[];
+    
+    // Associate floors, rooms, and beds with accommodations
     for (const accommodation of accommodations) {
-      const floorsQuery = query(collection(db, FLOORS_COLLECTION), where('accommodationId', '==', accommodation.id));
-      const floorsSnapshot = await getDocs(floorsQuery);
-      accommodation.floors = floorsSnapshot.docs.map(doc => fromFirestore({ id: doc.id, ...doc.data() })) as Floor[];
+      accommodation.floors = allFloors.filter(f => f.accommodationId === accommodation.id);
       
-      // Load rooms for each floor
       for (const floor of accommodation.floors) {
-        const roomsQuery = query(collection(db, ROOMS_COLLECTION), where('floorId', '==', floor.id));
-        const roomsSnapshot = await getDocs(roomsQuery);
-        floor.rooms = roomsSnapshot.docs.map(doc => fromFirestore({ id: doc.id, ...doc.data() })) as Room[];
+        floor.rooms = allRooms.filter(r => r.floorId === floor.id);
         
-        // Load beds for each room
         for (const room of floor.rooms) {
-          const bedsQuery = query(collection(db, BEDS_COLLECTION), where('roomId', '==', room.id));
-          const bedsSnapshot = await getDocs(bedsQuery);
-          room.beds = bedsSnapshot.docs.map(doc => fromFirestore({ id: doc.id, ...doc.data() })) as Bed[];
+          room.beds = allBeds.filter(b => b.roomId === room.id);
         }
       }
     }

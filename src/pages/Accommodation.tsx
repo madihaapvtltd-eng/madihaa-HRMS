@@ -634,7 +634,7 @@ export const AccommodationPage = () => {
                                                     <User className="w-2 h-2" />
                                                   </Button>
                                                 ) : (
-                                                  <Button variant="secondary" size="sm" onClick={() => openModal('assign', { ...bed, accommodationId: accommodation.id })}>
+                                                  <Button variant="secondary" size="sm" onClick={() => openModal('assign', { ...bed, accommodationId: accommodation.id, floorId: floor.id, roomId: room.id })}>
                                                     <User className="w-2 h-2" />
                                                   </Button>
                                                 )}

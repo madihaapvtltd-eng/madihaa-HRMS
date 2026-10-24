@@ -24,6 +24,8 @@ import {
   createAssignment,
   deleteAssignment
 } from '../lib/accommodation';
+import { collection, doc, deleteDoc, getDocs, query, where } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 import type { Accommodation, Bed } from '../types';
 
 export const AccommodationPage = () => {
@@ -121,6 +123,30 @@ export const AccommodationPage = () => {
       loadAccommodations();
     } catch (error) {
       alert('Failed to duplicate room: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    }
+  };
+
+  const handleDeleteBed = async (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this bed?')) return;
+    
+    try {
+      const bedsSnapshot = await getDocs(query(collection(db, 'beds'), where('__name__', '==', id)));
+      if (!bedsSnapshot.empty) {
+        const bedData = bedsSnapshot.docs[0].data();
+        
+        // If bed has assigned employee, unassign them first
+        if (bedData.assignedEmployeeId) {
+          await deleteAssignment(bedData.assignedEmployeeId);
+          await updateEmployee(bedData.assignedEmployeeId, {
+            accommodation: undefined
+          });
+        }
+      }
+      
+      await deleteDoc(doc(db, 'beds', id));
+      loadAccommodations();
+    } catch (error) {
+      alert('Failed to delete bed: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   };
 
@@ -600,9 +626,12 @@ export const AccommodationPage = () => {
                                                 <Button variant="secondary" size="sm" onClick={() => openModal('bed', { ...bed, roomId: room.id })}>
                                                   <Edit className="w-2 h-2" />
                                                 </Button>
+                                                <Button variant="secondary" size="sm" onClick={() => handleDeleteBed(bed.id)}>
+                                                  <Trash2 className="w-2 h-2" />
+                                                </Button>
                                                 {bed.assignedEmployeeId ? (
                                                   <Button variant="secondary" size="sm" onClick={() => handleUnassignEmployee(bed)}>
-                                                    <Trash2 className="w-2 h-2" />
+                                                    <User className="w-2 h-2" />
                                                   </Button>
                                                 ) : (
                                                   <Button variant="secondary" size="sm" onClick={() => openModal('assign', { ...bed, accommodationId: accommodation.id })}>

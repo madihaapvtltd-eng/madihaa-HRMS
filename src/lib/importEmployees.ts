@@ -4,27 +4,27 @@ import type { Employee } from '../types';
 interface MasterEmployee {
   sn: string;
   'EMP ID': string;
-  Name: string;
-  'Job Level': string;
-  Location: string;
-  'D.O.J': string;
-  SALARY: string;
-  POSITION: string;
-  COUNTRY: string;
-  DOB: string;
-  MOBILE: string;
-  'WP NO': string;
-  'WP EXP DATE': string;
-  'PP / ID NUMBER': string;
-  'PP / ID EXP DATE': string;
-  'MED EXP DATE': string;
-  'INSURANCE NUMBER': string;
-  'INSURANCE EXP DATE': string;
-  SLOT: string;
-  'QTA PAID': string;
-  'Work Site': string;
-  STATUS: string;
-  'work location'?: string;
+  joinDate: string;
+  fullName: string;
+  phone: string;
+  location: string;
+  designation: string;
+  country: string;
+  dob: string;
+  wpNo: string;
+  wpExpDate: string;
+  ppIdNumber: string;
+  ppIdExpDate: string;
+  medExpDate: string;
+  insuranceNumber: string;
+  insuranceExpDate: string;
+  workSite: string;
+  workLocation: string;
+  status: string;
+  jobLevel: string;
+  salary: string;
+  slot: string;
+  qtaPaid: string;
 }
 
 // Parse date in DD/MM/YYYY format
@@ -232,8 +232,8 @@ const splitName = (fullName: string): { firstName: string; lastName: string } =>
 
 // Map master employee format to app's Employee format
 const mapMasterEmployeeToApp = (master: MasterEmployee): Partial<Employee> => {
-  const { firstName, lastName } = splitName(master.Name);
-  const joinDate = parseDate(master['D.O.J']);
+  const { firstName, lastName } = splitName(master.fullName);
+  const joinDate = parseDate(master.joinDate);
   
   // Check if employee image exists in public folder
   const employeeId = master['EMP ID'];
@@ -252,13 +252,13 @@ const mapMasterEmployeeToApp = (master: MasterEmployee): Partial<Employee> => {
     registrationNumber: master['EMP ID'],
     firstName,
     lastName,
-    fullName: master.Name,
+    fullName: master.fullName,
     email: '', // Not available in master data
-    phone: master.MOBILE || '',
+    phone: master.phone || '',
     photo: photoPath,
-    department: master.Location || '',
-    designation: master.POSITION || '',
-    status: master.STATUS?.toLowerCase() === 'active' ? 'active' : 'active',
+    department: master.location || '',
+    designation: master.designation || '',
+    status: master.status?.toLowerCase() === 'active' ? 'active' : 'active',
     joinDate: joinDate || new Date(),
     emergencyContact: {
       name: '',
@@ -268,45 +268,45 @@ const mapMasterEmployeeToApp = (master: MasterEmployee): Partial<Employee> => {
     employmentHistory: [],
     education: [],
     medicalInfo: {
-      ...(master['MED EXP DATE'] && master['MED EXP DATE'] !== 'N/A' ? { insuranceProvider: 'Medical Certificate' } : {}),
-      ...(master['INSURANCE NUMBER'] && master['INSURANCE NUMBER'] !== 'N/A' ? { insurancePolicyNumber: master['INSURANCE NUMBER'] } : {})
+      ...(master.medExpDate && master.medExpDate !== 'N/A' ? { insuranceProvider: 'Medical Certificate' } : {}),
+      ...(master.insuranceNumber && master.insuranceNumber !== 'N/A' ? { insurancePolicyNumber: master.insuranceNumber } : {})
     },
     documents: [
       // Passport/ID document
-      ...(master['PP / ID NUMBER'] ? [{
+      ...(master.ppIdNumber ? [{
         id: `doc-${master['EMP ID']}-passport`,
         type: 'passport' as const,
         name: 'Passport/ID',
         url: '',
         uploadedAt: new Date(),
-        expiryDate: parseDate(master['PP / ID EXP DATE'])
+        expiryDate: parseDate(master.ppIdExpDate)
       }] : []),
       // Work Permit document
-      ...(master['WP NO'] && master['WP NO'] !== 'N/A' ? [{
+      ...(master.wpNo && master.wpNo !== 'N/A' ? [{
         id: `doc-${master['EMP ID']}-wp`,
         type: 'id_card' as const,
         name: 'Work Permit',
         url: '',
         uploadedAt: new Date(),
-        expiryDate: parseDate(master['WP EXP DATE'])
+        expiryDate: parseDate(master.wpExpDate)
       }] : []),
       // Medical document
-      ...(master['MED EXP DATE'] && master['MED EXP DATE'] !== 'N/A' ? [{
+      ...(master.medExpDate && master.medExpDate !== 'N/A' ? [{
         id: `doc-${master['EMP ID']}-medical`,
         type: 'other' as const,
         name: 'Medical Certificate',
         url: '',
         uploadedAt: new Date(),
-        expiryDate: parseDate(master['MED EXP DATE'])
+        expiryDate: parseDate(master.medExpDate)
       }] : []),
       // Insurance document
-      ...(master['INSURANCE NUMBER'] && master['INSURANCE EXP DATE'] && master['INSURANCE EXP DATE'] !== 'N/A' ? [{
+      ...(master.insuranceNumber && master.insuranceExpDate && master.insuranceExpDate !== 'N/A' ? [{
         id: `doc-${master['EMP ID']}-insurance`,
         type: 'other' as const,
         name: 'Insurance',
         url: '',
         uploadedAt: new Date(),
-        expiryDate: parseDate(master['INSURANCE EXP DATE'])
+        expiryDate: parseDate(master.insuranceExpDate)
       }] : [])
     ],
     assets: [],
@@ -315,17 +315,34 @@ const mapMasterEmployeeToApp = (master: MasterEmployee): Partial<Employee> => {
       employeeId: master['EMP ID'],
       contractType: 'permanent',
       contractStartDate: joinDate || new Date(),
-      salaryAmount: parseSalary(master.SALARY),
+      salaryAmount: parseSalary(master.salary),
       currency: 'MVR',
       paymentFrequency: 'monthly',
-      jobDescription: master.POSITION || '',
+      jobDescription: master.designation || '',
       reportingManager: '',
       signingDate: joinDate || new Date(),
       signedBy: 'System Import',
       status: 'active'
     },
     createdAt: new Date(),
-    updatedAt: new Date()
+    updatedAt: new Date(),
+    // Additional fields
+    country: master.country,
+    dob: parseDate(master.dob),
+    wpNo: master.wpNo,
+    wpExpDate: parseDate(master.wpExpDate),
+    ppIdNumber: master.ppIdNumber,
+    ppIdExpDate: parseDate(master.ppIdExpDate),
+    medExpDate: parseDate(master.medExpDate),
+    insuranceNumber: master.insuranceNumber,
+    insuranceExpDate: parseDate(master.insuranceExpDate),
+    workSite: master.workSite,
+    workLocation: master.workLocation,
+    jobLevel: master.jobLevel,
+    salary: master.salary,
+    slot: master.slot,
+    qtaPaid: master.qtaPaid,
+    sn: master.sn
   };
 };
 
@@ -389,8 +406,8 @@ export const validateMasterEmployeeJSON = (data: any): { valid: boolean; errors:
     return { valid: false, errors: ['Array is empty'], validRows: [] };
   }
 
-  // Only require EMP ID and Name - other fields can be empty
-  const requiredFields = ['EMP ID', 'Name'];
+  // Only require EMP ID and fullName - other fields can be empty
+  const requiredFields = ['EMP ID', 'fullName'];
   
   data.forEach((item, index) => {
     // Skip completely empty rows
@@ -457,48 +474,48 @@ export const updateEmployeesFromJSON = async (jsonData: any[]): Promise<{ update
       
       try {
         // Map JSON fields to Firestore format (preserving existing fields)
-        const { firstName, lastName } = splitName(jsonEmp.Name);
-        const joinDate = parseDate(jsonEmp['D.O.J']);
-        const dob = parseDate(jsonEmp.DOB);
+        const { firstName, lastName } = splitName(jsonEmp.fullName);
+        const joinDate = parseDate(jsonEmp.joinDate);
+        const dob = parseDate(jsonEmp.dob);
         
         // Build update data with all fields from JSON
         const updateData: any = {
           // Core employee fields
           firstName,
           lastName,
-          fullName: jsonEmp.Name,
-          phone: jsonEmp.MOBILE || firestoreEmp.phone,
-          department: jsonEmp.Location || firestoreEmp.department,
-          designation: jsonEmp.POSITION || firestoreEmp.designation,
+          fullName: jsonEmp.fullName,
+          phone: jsonEmp.phone || firestoreEmp.phone,
+          department: jsonEmp.location || firestoreEmp.department,
+          designation: jsonEmp.designation || firestoreEmp.designation,
           joinDate: joinDate || firestoreEmp.joinDate,
           
           // Additional fields from JSON (will be added as extra fields)
           sn: jsonEmp.sn,
-          jobLevel: jsonEmp['Job Level'],
-          location: jsonEmp.Location,
-          salary: jsonEmp.SALARY,
-          country: jsonEmp.COUNTRY,
+          jobLevel: jsonEmp.jobLevel,
+          location: jsonEmp.location,
+          salary: jsonEmp.salary,
+          country: jsonEmp.country,
           dob: dob,
-          wpNo: jsonEmp['WP NO'],
-          wpExpDate: jsonEmp['WP EXP DATE'],
-          ppIdNumber: jsonEmp['PP / ID NUMBER'],
-          ppIdExpDate: jsonEmp['PP / ID EXP DATE'],
-          medExpDate: jsonEmp['MED EXP DATE'],
-          insuranceNumber: jsonEmp['INSURANCE NUMBER'],
-          insuranceExpDate: jsonEmp['INSURANCE EXP DATE'],
-          slot: jsonEmp.SLOT,
-          qtaPaid: jsonEmp['QTA PAID'],
-          workSite: jsonEmp['Work Site'],
-          workLocation: jsonEmp['work location'],
-          originalStatus: jsonEmp.STATUS
+          wpNo: jsonEmp.wpNo,
+          wpExpDate: parseDate(jsonEmp.wpExpDate),
+          ppIdNumber: jsonEmp.ppIdNumber,
+          ppIdExpDate: parseDate(jsonEmp.ppIdExpDate),
+          medExpDate: parseDate(jsonEmp.medExpDate),
+          insuranceNumber: jsonEmp.insuranceNumber,
+          insuranceExpDate: parseDate(jsonEmp.insuranceExpDate),
+          slot: jsonEmp.slot,
+          qtaPaid: jsonEmp.qtaPaid,
+          workSite: jsonEmp.workSite,
+          workLocation: jsonEmp.workLocation,
+          originalStatus: jsonEmp.status
         };
         
         // Update medical info if available
-        if (jsonEmp['INSURANCE NUMBER'] && jsonEmp['INSURANCE NUMBER'] !== 'N/A') {
+        if (jsonEmp.insuranceNumber && jsonEmp.insuranceNumber !== 'N/A') {
           updateData.medicalInfo = {
             ...(firestoreEmp.medicalInfo || {}),
-            insuranceProvider: jsonEmp['INSURANCE NUMBER'],
-            insurancePolicyNumber: jsonEmp['INSURANCE NUMBER']
+            insuranceProvider: jsonEmp.insuranceNumber,
+            insurancePolicyNumber: jsonEmp.insuranceNumber
           };
         }
         
@@ -506,7 +523,7 @@ export const updateEmployeesFromJSON = async (jsonData: any[]): Promise<{ update
         const documents = [...(firestoreEmp.documents || [])];
         
         // Update or add passport/ID document
-        if (jsonEmp['PP / ID NUMBER'] && jsonEmp['PP / ID NUMBER'] !== 'N/A') {
+        if (jsonEmp.ppIdNumber && jsonEmp.ppIdNumber !== 'N/A') {
           const existingDocIndex = documents.findIndex((d: any) => d.type === 'passport');
           const passportDoc = {
             id: `doc-${empId}-passport`,
@@ -514,7 +531,7 @@ export const updateEmployeesFromJSON = async (jsonData: any[]): Promise<{ update
             name: 'Passport/ID',
             url: '',
             uploadedAt: new Date(),
-            expiryDate: parseDate(jsonEmp['PP / ID EXP DATE'])
+            expiryDate: parseDate(jsonEmp.ppIdExpDate)
           };
           if (existingDocIndex >= 0) {
             documents[existingDocIndex] = passportDoc;
@@ -524,7 +541,7 @@ export const updateEmployeesFromJSON = async (jsonData: any[]): Promise<{ update
         }
         
         // Update or add work permit document
-        if (jsonEmp['WP NO'] && jsonEmp['WP NO'] !== 'N/A') {
+        if (jsonEmp.wpNo && jsonEmp.wpNo !== 'N/A') {
           const existingDocIndex = documents.findIndex((d: any) => d.type === 'id_card');
           const wpDoc = {
             id: `doc-${empId}-wp`,
@@ -532,7 +549,7 @@ export const updateEmployeesFromJSON = async (jsonData: any[]): Promise<{ update
             name: 'Work Permit',
             url: '',
             uploadedAt: new Date(),
-            expiryDate: parseDate(jsonEmp['WP EXP DATE'])
+            expiryDate: parseDate(jsonEmp.wpExpDate)
           };
           if (existingDocIndex >= 0) {
             documents[existingDocIndex] = wpDoc;
@@ -542,7 +559,7 @@ export const updateEmployeesFromJSON = async (jsonData: any[]): Promise<{ update
         }
         
         // Update or add medical document
-        if (jsonEmp['MED EXP DATE'] && jsonEmp['MED EXP DATE'] !== 'N/A') {
+        if (jsonEmp.medExpDate && jsonEmp.medExpDate !== 'N/A') {
           const existingDocIndex = documents.findIndex((d: any) => d.name === 'Medical Certificate');
           const medicalDoc = {
             id: `doc-${empId}-medical`,
@@ -550,7 +567,7 @@ export const updateEmployeesFromJSON = async (jsonData: any[]): Promise<{ update
             name: 'Medical Certificate',
             url: '',
             uploadedAt: new Date(),
-            expiryDate: parseDate(jsonEmp['MED EXP DATE'])
+            expiryDate: parseDate(jsonEmp.medExpDate)
           };
           if (existingDocIndex >= 0) {
             documents[existingDocIndex] = medicalDoc;
@@ -560,7 +577,7 @@ export const updateEmployeesFromJSON = async (jsonData: any[]): Promise<{ update
         }
         
         // Update or add insurance document
-        if (jsonEmp['INSURANCE NUMBER'] && jsonEmp['INSURANCE EXP DATE'] && jsonEmp['INSURANCE EXP DATE'] !== 'N/A') {
+        if (jsonEmp.insuranceNumber && jsonEmp.insuranceExpDate && jsonEmp.insuranceExpDate !== 'N/A') {
           const existingDocIndex = documents.findIndex((d: any) => d.name === 'Insurance');
           const insuranceDoc = {
             id: `doc-${empId}-insurance`,
@@ -568,7 +585,7 @@ export const updateEmployeesFromJSON = async (jsonData: any[]): Promise<{ update
             name: 'Insurance',
             url: '',
             uploadedAt: new Date(),
-            expiryDate: parseDate(jsonEmp['INSURANCE EXP DATE'])
+            expiryDate: parseDate(jsonEmp.insuranceExpDate)
           };
           if (existingDocIndex >= 0) {
             documents[existingDocIndex] = insuranceDoc;
@@ -580,8 +597,8 @@ export const updateEmployeesFromJSON = async (jsonData: any[]): Promise<{ update
         updateData.documents = documents;
         
         // Update contract details if salary changed
-        if (jsonEmp.SALARY && jsonEmp.SALARY !== 'N/A') {
-          const salaryAmount = parseSalary(jsonEmp.SALARY);
+        if (jsonEmp.salary && jsonEmp.salary !== 'N/A') {
+          const salaryAmount = parseSalary(jsonEmp.salary);
           if (salaryAmount > 0) {
             updateData.contractDetails = {
               ...(firestoreEmp.contractDetails || {
@@ -591,7 +608,7 @@ export const updateEmployeesFromJSON = async (jsonData: any[]): Promise<{ update
                 contractStartDate: joinDate || new Date(),
                 currency: 'MVR',
                 paymentFrequency: 'monthly',
-                jobDescription: jsonEmp.POSITION || '',
+                jobDescription: jsonEmp.designation || '',
                 reportingManager: '',
                 signingDate: joinDate || new Date(),
                 signedBy: 'System Import',
@@ -604,12 +621,12 @@ export const updateEmployeesFromJSON = async (jsonData: any[]): Promise<{ update
         
         await updateEmployee(firestoreEmp.id, updateData);
         results.updated++;
-        console.log(`Updated employee ${empId}: ${jsonEmp.Name}`);
+        console.log(`Updated employee ${empId}: ${jsonEmp.fullName}`);
         
       } catch (error) {
         results.failed++;
         const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-        results.errors.push(`Failed to update ${jsonEmp.Name} (${empId}): ${errorMsg}`);
+        results.errors.push(`Failed to update ${jsonEmp.fullName} (${empId}): ${errorMsg}`);
         console.error(`Update error for ${empId}:`, error);
       }
     }

@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Search, Filter, Download, Eye, Edit, Trash2, UserPlus, Upload } from 'lucide-react';
+import { Search, Filter, Download, Eye, Edit, Trash2, UserPlus, Upload, Grid, List } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Card, CardContent } from '../components/ui/Card';
+import { EmployeeCard } from '../components/EmployeeCard';
 import { getEmployees, deleteEmployee } from '../lib/employees';
 import { importEmployeesFromJSON, validateMasterEmployeeJSON, normalizeExistingEmployeeNames, updateEmployeePhotoPaths, removeDuplicateEmployees } from '../lib/importEmployees';
 import type { Employee } from '../types';
@@ -19,7 +20,8 @@ export const Employees = () => {
   const [showImportModal, setShowImportModal] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importResults, setImportResults] = useState<{ success: number; failed: number; skipped: number; errors: string[] } | null>(null);
-  const [activeTab, setActiveTab] = useState<'current' | 'on_leave' | 'no_status' | 'past'>('no_status');
+  const [activeTab, setActiveTab] = useState<'current' | 'on_leave' | 'no_status' | 'past'>('current');
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
 
   const loadEmployees = useCallback(async () => {
     try {
@@ -345,6 +347,20 @@ export const Employees = () => {
               <option value="resigned">Resigned</option>
               <option value="terminated">Terminated</option>
             </select>
+            <div className="flex border border-secondary-300 rounded-lg overflow-hidden">
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`px-3 py-2 ${viewMode === 'grid' ? 'bg-primary-600 text-white' : 'bg-white text-secondary-600 hover:bg-secondary-50'}`}
+              >
+                <Grid className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => setViewMode('table')}
+                className={`px-3 py-2 ${viewMode === 'table' ? 'bg-primary-600 text-white' : 'bg-white text-secondary-600 hover:bg-secondary-50'}`}
+              >
+                <List className="w-5 h-5" />
+              </button>
+            </div>
             <Button variant="secondary">
               <Filter className="w-5 h-5 mr-2" />
               More Filters
@@ -357,135 +373,159 @@ export const Employees = () => {
         </CardContent>
       </Card>
 
-      {/* Employees Table */}
-      <Card>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-secondary-50 border-b border-secondary-200">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-secondary-600 uppercase tracking-wider">
-                  Employee
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-secondary-600 uppercase tracking-wider">
-                  Department
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-secondary-600 uppercase tracking-wider">
-                  Designation
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-secondary-600 uppercase tracking-wider">
-                  Accommodation
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-secondary-600 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-secondary-600 uppercase tracking-wider">
-                  Join Date
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-secondary-600 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-secondary-200">
-              {filteredEmployees.map((employee, index) => (
-                <motion.tr
-                  key={employee.id}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: index * 0.05 }}
-                  className="hover:bg-secondary-50"
-                >
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      {employee.photo ? (
-                        <img
-                          src={employee.photo}
-                          alt={employee.fullName}
-                          className="h-10 w-10 rounded-full object-cover"
-                          onError={(e) => {
-                            // Fallback to initials if image fails to load
-                            e.currentTarget.style.display = 'none';
-                            e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                          }}
-                        />
-                      ) : null}
-                      <div 
-                        className={`flex-shrink-0 h-10 w-10 bg-primary-100 rounded-full flex items-center justify-center ${employee.photo ? 'hidden' : ''}`}
-                      >
-                        <span className="text-primary-600 font-medium">
-                          {employee.firstName.charAt(0)}{employee.lastName.charAt(0)}
-                        </span>
-                      </div>
-                      <div className="ml-4">
-                        <div className="text-sm font-medium text-secondary-900">
-                          {employee.fullName}
-                        </div>
-                        <div className="text-sm text-secondary-600">{employee.employeeId}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-secondary-900">{employee.department}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-secondary-900">{employee.designation}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {employee.accommodation ? (
-                      <div className="text-sm text-secondary-900">
-                        {employee.accommodation.accommodationName}
-                        <div className="text-xs text-secondary-600">
-                          {employee.accommodation.floorName} - Room {employee.accommodation.roomNumber} - Bed {employee.accommodation.bedNumber} ({employee.accommodation.bedPosition})
-                        </div>
-                      </div>
-                    ) : (
-                      <span className="text-sm text-secondary-400">Not assigned</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${statusColors[employee.status.toLowerCase() as keyof typeof statusColors] || 'bg-gray-100 text-gray-800'}`}>
-                      {employee.status.replace('_', ' ')}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary-600">
-                    {employee.joinDate instanceof Date && !isNaN(employee.joinDate.getTime())
-                      ? employee.joinDate.toLocaleDateString()
-                      : 'N/A'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <div className="flex items-center justify-end space-x-2">
-                      <button 
-                        onClick={() => navigate(`/employees/${employee.id}`)}
-                        className="text-primary-600 hover:text-primary-900"
-                      >
-                        <Eye className="w-5 h-5" />
-                      </button>
-                      <button 
-                        onClick={() => navigate(`/employees/${employee.id}`)}
-                        className="text-secondary-600 hover:text-secondary-900"
-                      >
-                        <Edit className="w-5 h-5" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(employee.id)}
-                        className="text-red-600 hover:text-red-900"
-                      >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
-                    </div>
-                  </td>
-                </motion.tr>
-              ))}
-            </tbody>
-          </table>
+      {/* Employees Display */}
+      {viewMode === 'grid' ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {filteredEmployees.map((employee, index) => (
+            <motion.div
+              key={employee.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.05 }}
+            >
+              <EmployeeCard
+                employee={employee}
+                onClick={() => navigate(`/employees/${employee.id}`)}
+              />
+            </motion.div>
+          ))}
         </div>
-        
-        {filteredEmployees.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-secondary-600">No employees found</p>
+      ) : (
+        <Card>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-secondary-50 border-b border-secondary-200">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-secondary-600 uppercase tracking-wider">
+                    Employee
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-secondary-600 uppercase tracking-wider">
+                    Department
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-secondary-600 uppercase tracking-wider">
+                    Designation
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-secondary-600 uppercase tracking-wider">
+                    Accommodation
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-secondary-600 uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-secondary-600 uppercase tracking-wider">
+                    Join Date
+                  </th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-secondary-600 uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-secondary-200">
+                {filteredEmployees.map((employee, index) => (
+                  <motion.tr
+                    key={employee.id}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: index * 0.05 }}
+                    className="hover:bg-secondary-50"
+                  >
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        {employee.photo ? (
+                          <img
+                            src={employee.photo}
+                            alt={employee.fullName}
+                            className="h-10 w-10 rounded-full object-cover"
+                            onError={(e) => {
+                              // Fallback to initials if image fails to load
+                              e.currentTarget.style.display = 'none';
+                              e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                            }}
+                          />
+                        ) : null}
+                        <div 
+                          className={`flex-shrink-0 h-10 w-10 bg-primary-100 rounded-full flex items-center justify-center ${employee.photo ? 'hidden' : ''}`}
+                        >
+                          <span className="text-primary-600 font-medium">
+                            {employee.firstName.charAt(0)}{employee.lastName.charAt(0)}
+                          </span>
+                        </div>
+                        <div className="ml-4">
+                          <div className="text-sm font-medium text-secondary-900">
+                            {employee.fullName}
+                          </div>
+                          <div className="text-sm text-secondary-600">{employee.employeeId}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-secondary-900">{employee.department}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-secondary-900">{employee.designation}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {employee.accommodation ? (
+                        <div className="text-sm text-secondary-900">
+                          {employee.accommodation.accommodationName}
+                          <div className="text-xs text-secondary-600">
+                            {employee.accommodation.floorName} - Room {employee.accommodation.roomNumber} - Bed {employee.accommodation.bedNumber} ({employee.accommodation.bedPosition})
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-sm text-secondary-400">Not assigned</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${statusColors[employee.status.toLowerCase() as keyof typeof statusColors] || 'bg-gray-100 text-gray-800'}`}>
+                        {employee.status.replace('_', ' ')}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary-600">
+                      {employee.joinDate instanceof Date && !isNaN(employee.joinDate.getTime())
+                        ? employee.joinDate.toLocaleDateString()
+                        : 'N/A'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <div className="flex items-center justify-end space-x-2">
+                        <button 
+                          onClick={() => navigate(`/employees/${employee.id}`)}
+                          className="text-primary-600 hover:text-primary-900"
+                        >
+                          <Eye className="w-5 h-5" />
+                        </button>
+                        <button 
+                          onClick={() => navigate(`/employees/${employee.id}`)}
+                          className="text-secondary-600 hover:text-secondary-900"
+                        >
+                          <Edit className="w-5 h-5" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(employee.id)}
+                          className="text-red-600 hover:text-red-900"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      </div>
+                    </td>
+                  </motion.tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        )}
-      </Card>
+          
+          {filteredEmployees.length === 0 && (
+            <div className="text-center py-12">
+              <p className="text-secondary-600">No employees found</p>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {filteredEmployees.length === 0 && viewMode === 'grid' && (
+        <div className="text-center py-12">
+          <p className="text-secondary-600">No employees found</p>
+        </div>
+      )}
 
       {/* Import Modal */}
       {showImportModal && (

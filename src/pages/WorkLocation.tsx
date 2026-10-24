@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { Plus, MapPin, Users, Trash2, Edit2, X } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Card, CardHeader, CardContent } from '../components/ui/Card';
+import type { WorkLocation } from '../types';
 import { 
-  type WorkLocation, 
   getAllWorkLocations, 
   getWorkLocation,
   createWorkLocation, 
@@ -273,7 +273,7 @@ export const WorkLocationPage = () => {
                 <div className="mt-4 pt-4 border-t border-secondary-200">
                   <p className="text-xs text-secondary-500 mb-2">Assigned Staff:</p>
                   <div className="flex flex-wrap gap-2">
-                    {location.assignedStaff.map((staffId) => {
+                    {location.assignedStaff.map((staffId: string) => {
                       const emp = employees.find(e => e.id === staffId);
                       return emp ? (
                         <span key={staffId} className="text-xs bg-secondary-100 text-secondary-700 px-2 py-1 rounded flex items-center gap-1">

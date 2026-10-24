@@ -1,13 +1,9 @@
 import { useState, useEffect } from 'react';
 import { PersonalInfo } from './PersonalInfo';
-import { PassportIDDetails } from './PassportIDDetails';
-import { WorkPermitVisa } from './WorkPermitVisa';
-import { EmergencyContacts } from './EmergencyContacts';
-import { EmploymentHistory } from './EmploymentHistory';
-import { ContractProbation } from './ContractProbation';
-import { DocumentsUpload } from './DocumentsUpload';
+import { SalaryAllowances } from './SalaryAllowances';
+import { StaffEquipment } from './StaffEquipment';
 import { AccommodationSelection } from './AccommodationSelection';
-import type { Employee, EmployeeDocument, EmergencyContact, EmploymentRecord, ContractDetails, ProbationDetails, EmployeeAccommodation } from '../../types';
+import type { Employee, EmployeeAccommodation } from '../../types';
 
 interface EmployeeFormWizardProps {
   employee?: Partial<Employee>;
@@ -35,24 +31,33 @@ export const EmployeeFormWizard = ({ employee, onSave, onCancel, isEditing }: Em
         registrationNumber: employee.registrationNumber || '',
         photo: employee.photo || '',
         status: employee.status || 'active',
-        emergencyContact: employee.emergencyContact || { name: '', relationship: '', phone: '' },
-        employmentHistory: employee.employmentHistory || [],
-        documents: employee.documents || [],
-        contractDetails: employee.contractDetails,
-        probationDetails: employee.probationDetails,
+        salaryAllowances: employee.salaryAllowances,
+        staffEquipment: employee.staffEquipment,
         accommodation: employee.accommodation,
+        country: employee.country || '',
+        dob: employee.dob,
+        wpNo: employee.wpNo || '',
+        wpExpDate: employee.wpExpDate,
+        ppIdNumber: employee.ppIdNumber || '',
+        ppIdExpDate: employee.ppIdExpDate,
+        medExpDate: employee.medExpDate,
+        insuranceNumber: employee.insuranceNumber || '',
+        insuranceExpDate: employee.insuranceExpDate,
+        workSite: employee.workSite || '',
+        workLocation: employee.workLocation || '',
+        jobLevel: employee.jobLevel || '',
+        salary: employee.salary || '',
+        slot: employee.slot || '',
+        qtaPaid: employee.qtaPaid || '',
+        sn: employee.sn || '',
       });
     }
   }, [employee]);
 
   const steps = [
     { title: 'Personal Information', icon: '👤' },
-    { title: 'Passport & ID', icon: '📄' },
-    { title: 'Work Permit & Visa', icon: '✈️' },
-    { title: 'Emergency Contacts', icon: '🚨' },
-    { title: 'Employment History', icon: '📋' },
-    { title: 'Contract & Probation', icon: '📑' },
-    { title: 'Documents', icon: '📁' },
+    { title: 'Salary & Allowances', icon: '💰' },
+    { title: 'Equipment & Items', icon: '🎒' },
     { title: 'Accommodation', icon: '🏠' },
   ];
 
@@ -61,49 +66,14 @@ export const EmployeeFormWizard = ({ employee, onSave, onCancel, isEditing }: Em
     setCurrentStep(1);
   };
 
-  const handlePassportIDNext = (data: EmployeeDocument[]) => {
-    setFormData(prev => ({ ...prev, documents: [...(prev.documents || []), ...data] }));
+  const handleSalaryAllowancesNext = (data: Partial<Employee>) => {
+    setFormData(prev => ({ ...prev, ...data }));
     setCurrentStep(2);
   };
 
-  const handleWorkPermitVisaNext = (data: EmployeeDocument[]) => {
-    setFormData(prev => ({
-      ...prev,
-      documents: prev.documents?.filter(d => !data.find(nd => nd.id === d.id)) || [],
-    }));
-    setFormData(prev => ({ ...prev, documents: [...(prev.documents || []), ...data] }));
+  const handleStaffEquipmentNext = (data: Partial<Employee>) => {
+    setFormData(prev => ({ ...prev, ...data }));
     setCurrentStep(3);
-  };
-
-  const handleEmergencyContactsNext = (data: EmergencyContact[]) => {
-    // Use first contact as primary emergency contact
-    setFormData(prev => ({
-      ...prev,
-      emergencyContact: data[0] || { name: '', relationship: '', phone: '' },
-    }));
-    setCurrentStep(4);
-  };
-
-  const handleEmploymentHistoryNext = (data: EmploymentRecord[]) => {
-    setFormData(prev => ({ ...prev, employmentHistory: data }));
-    setCurrentStep(5);
-  };
-
-  const handleContractProbationNext = (data: {
-    contract: Partial<ContractDetails>;
-    probation: Partial<ProbationDetails>;
-  }) => {
-    setFormData(prev => ({
-      ...prev,
-      contractDetails: data.contract as ContractDetails,
-      probationDetails: data.probation as ProbationDetails,
-    }));
-    setCurrentStep(6);
-  };
-
-  const handleDocumentsNext = (data: EmployeeDocument[]) => {
-    setFormData(prev => ({ ...prev, documents: data }));
-    setCurrentStep(7);
   };
 
   const handleAccommodationNext = (accommodation: EmployeeAccommodation | undefined) => {
@@ -166,66 +136,30 @@ export const EmployeeFormWizard = ({ employee, onSave, onCancel, isEditing }: Em
         );
       case 1:
         return (
-          <PassportIDDetails
-            documents={formData.documents?.filter(d => d.type === 'passport' || d.type === 'id_card') || []}
-            onNext={handlePassportIDNext}
+          <SalaryAllowances
+            employee={formData}
+            onNext={handleSalaryAllowancesNext}
             onPrev={() => setCurrentStep(0)}
+            onCancel={onCancel}
             onSave={handleSaveCurrent}
           />
         );
       case 2:
         return (
-          <WorkPermitVisa
-            documents={formData.documents?.filter(d => d.name.includes('Work Permit') || d.name.includes('Visa')) || []}
-            onNext={handleWorkPermitVisaNext}
+          <StaffEquipment
+            employee={formData}
+            onNext={handleStaffEquipmentNext}
             onPrev={() => setCurrentStep(1)}
+            onCancel={onCancel}
             onSave={handleSaveCurrent}
           />
         );
       case 3:
         return (
-          <EmergencyContacts
-            contacts={formData.emergencyContact ? [formData.emergencyContact] : []}
-            onNext={handleEmergencyContactsNext}
-            onPrev={() => setCurrentStep(2)}
-            onSave={handleSaveCurrent}
-          />
-        );
-      case 4:
-        return (
-          <EmploymentHistory
-            records={formData.employmentHistory || []}
-            onNext={handleEmploymentHistoryNext}
-            onPrev={() => setCurrentStep(3)}
-            onSave={handleSaveCurrent}
-          />
-        );
-      case 5:
-        return (
-          <ContractProbation
-            contract={formData.contractDetails}
-            probation={formData.probationDetails}
-            onNext={handleContractProbationNext}
-            onPrev={() => setCurrentStep(4)}
-            onSave={handleSaveCurrent}
-          />
-        );
-      case 6:
-        return (
-          <DocumentsUpload
-            documents={formData.documents || []}
-            onNext={handleDocumentsNext}
-            onPrev={() => setCurrentStep(5)}
-            onSubmit={handleComplete}
-            onSave={handleSaveCurrent}
-          />
-        );
-      case 7:
-        return (
           <AccommodationSelection
             accommodation={formData.accommodation}
             onNext={handleAccommodationNext}
-            onPrev={() => setCurrentStep(6)}
+            onPrev={() => setCurrentStep(2)}
             onCancel={onCancel}
             onSave={handleSaveCurrent}
           />

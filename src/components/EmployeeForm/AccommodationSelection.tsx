@@ -19,6 +19,7 @@ export const AccommodationSelection = ({ accommodation, onNext, onPrev, onCancel
   const [selectedFloor, setSelectedFloor] = useState<string | undefined>(accommodation?.floorId);
   const [selectedRoom, setSelectedRoom] = useState<string | undefined>(accommodation?.roomId);
   const [selectedBed, setSelectedBed] = useState<string | undefined>(accommodation?.bedId);
+  const [accommodationItems, setAccommodationItems] = useState(accommodation?.accommodationItems || {});
 
   useEffect(() => {
     loadAccommodations();
@@ -64,7 +65,8 @@ export const AccommodationSelection = ({ accommodation, onNext, onPrev, onCancel
       bedId: selectedBed,
       bedNumber: bedData?.bedNumber,
       bedPosition: bedData?.position,
-      assignedDate: accommodation?.assignedDate || new Date()
+      assignedDate: accommodation?.assignedDate || new Date(),
+      accommodationItems: accommodationItems
     });
   };
 
@@ -77,6 +79,16 @@ export const AccommodationSelection = ({ accommodation, onNext, onPrev, onCancel
     setSelectedFloor(undefined);
     setSelectedRoom(undefined);
     setSelectedBed(undefined);
+  };
+
+  const handleItemChange = (item: 'bed' | 'mattress' | 'bedsheet' | 'pillow' | 'pillowCover', field: 'quantity' | 'lastIssuedDate', value: string) => {
+    setAccommodationItems(prev => ({
+      ...prev,
+      [item]: {
+        ...prev[item],
+        [field]: field === 'lastIssuedDate' && value ? new Date(value) : null
+      }
+    }));
   };
 
   const selectedAccommodationData = accommodations.find(a => a.id === selectedAccommodation);
@@ -208,6 +220,133 @@ export const AccommodationSelection = ({ accommodation, onNext, onPrev, onCancel
                 </select>
               </div>
             )}
+
+            {/* Accommodation Items */}
+            <div className="space-y-4 pt-4 border-t border-secondary-200">
+              <h3 className="font-semibold text-secondary-900">Accommodation Items</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="p-3 bg-secondary-50 rounded-lg">
+                    <label className="block text-sm font-medium text-secondary-700 mb-2">Bed</label>
+                    <div className="space-y-2">
+                      <div>
+                        <label className="block text-xs text-secondary-600 mb-1">Quantity</label>
+                        <input
+                          type="text"
+                          value={accommodationItems.bed?.quantity || ''}
+                          onChange={(e) => handleItemChange('bed', 'quantity', e.target.value)}
+                          className="w-full px-3 py-1.5 text-sm border border-secondary-300 rounded focus:outline-none focus:ring-2 focus:ring-primary-500"
+                          placeholder="1"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-secondary-600 mb-1">Last Issued Date</label>
+                        <input
+                          type="date"
+                          value={accommodationItems.bed?.lastIssuedDate ? accommodationItems.bed.lastIssuedDate.toISOString().split('T')[0] : ''}
+                          onChange={(e) => handleItemChange('bed', 'lastIssuedDate', e.target.value)}
+                          className="w-full px-3 py-1.5 text-sm border border-secondary-300 rounded focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-3 bg-secondary-50 rounded-lg">
+                    <label className="block text-sm font-medium text-secondary-700 mb-2">Mattress</label>
+                    <div className="space-y-2">
+                      <div>
+                        <label className="block text-xs text-secondary-600 mb-1">Quantity</label>
+                        <input
+                          type="text"
+                          value={accommodationItems.mattress?.quantity || ''}
+                          onChange={(e) => handleItemChange('mattress', 'quantity', e.target.value)}
+                          className="w-full px-3 py-1.5 text-sm border border-secondary-300 rounded focus:outline-none focus:ring-2 focus:ring-primary-500"
+                          placeholder="1"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-secondary-600 mb-1">Last Issued Date</label>
+                        <input
+                          type="date"
+                          value={accommodationItems.mattress?.lastIssuedDate ? accommodationItems.mattress.lastIssuedDate.toISOString().split('T')[0] : ''}
+                          onChange={(e) => handleItemChange('mattress', 'lastIssuedDate', e.target.value)}
+                          className="w-full px-3 py-1.5 text-sm border border-secondary-300 rounded focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-3 bg-secondary-50 rounded-lg">
+                    <label className="block text-sm font-medium text-secondary-700 mb-2">Bedsheet</label>
+                    <div className="space-y-2">
+                      <div>
+                        <label className="block text-xs text-secondary-600 mb-1">Quantity</label>
+                        <input
+                          type="text"
+                          value={accommodationItems.bedsheet?.quantity || ''}
+                          onChange={(e) => handleItemChange('bedsheet', 'quantity', e.target.value)}
+                          className="w-full px-3 py-1.5 text-sm border border-secondary-300 rounded focus:outline-none focus:ring-2 focus:ring-primary-500"
+                          placeholder="1"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-secondary-600 mb-1">Last Issued Date</label>
+                        <input
+                          type="date"
+                          value={accommodationItems.bedsheet?.lastIssuedDate ? accommodationItems.bedsheet.lastIssuedDate.toISOString().split('T')[0] : ''}
+                          onChange={(e) => handleItemChange('bedsheet', 'lastIssuedDate', e.target.value)}
+                          className="w-full px-3 py-1.5 text-sm border border-secondary-300 rounded focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-3 bg-secondary-50 rounded-lg">
+                    <label className="block text-sm font-medium text-secondary-700 mb-2">Pillow</label>
+                    <div className="space-y-2">
+                      <div>
+                        <label className="block text-xs text-secondary-600 mb-1">Quantity</label>
+                        <input
+                          type="text"
+                          value={accommodationItems.pillow?.quantity || ''}
+                          onChange={(e) => handleItemChange('pillow', 'quantity', e.target.value)}
+                          className="w-full px-3 py-1.5 text-sm border border-secondary-300 rounded focus:outline-none focus:ring-2 focus:ring-primary-500"
+                          placeholder="1"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-secondary-600 mb-1">Last Issued Date</label>
+                        <input
+                          type="date"
+                          value={accommodationItems.pillow?.lastIssuedDate ? accommodationItems.pillow.lastIssuedDate.toISOString().split('T')[0] : ''}
+                          onChange={(e) => handleItemChange('pillow', 'lastIssuedDate', e.target.value)}
+                          className="w-full px-3 py-1.5 text-sm border border-secondary-300 rounded focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-3 bg-secondary-50 rounded-lg">
+                    <label className="block text-sm font-medium text-secondary-700 mb-2">Pillow Cover</label>
+                    <div className="space-y-2">
+                      <div>
+                        <label className="block text-xs text-secondary-600 mb-1">Quantity</label>
+                        <input
+                          type="text"
+                          value={accommodationItems.pillowCover?.quantity || ''}
+                          onChange={(e) => handleItemChange('pillowCover', 'quantity', e.target.value)}
+                          className="w-full px-3 py-1.5 text-sm border border-secondary-300 rounded focus:outline-none focus:ring-2 focus:ring-primary-500"
+                          placeholder="1"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-secondary-600 mb-1">Last Issued Date</label>
+                        <input
+                          type="date"
+                          value={accommodationItems.pillowCover?.lastIssuedDate ? accommodationItems.pillowCover.lastIssuedDate.toISOString().split('T')[0] : ''}
+                          onChange={(e) => handleItemChange('pillowCover', 'lastIssuedDate', e.target.value)}
+                          className="w-full px-3 py-1.5 text-sm border border-secondary-300 rounded focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
 
             {/* Selected Accommodation Summary */}
             {selectedBedData && (

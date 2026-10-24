@@ -43,8 +43,29 @@ export interface Employee {
   contractDetails?: ContractDetails;
   probationDetails?: ProbationDetails;
   accommodation?: EmployeeAccommodation;
+  salaryAllowances?: SalaryAllowances;
+  staffEquipment?: StaffEquipment;
   createdAt: Date;
   updatedAt: Date;
+  // Additional fields from master_employees.json
+  country?: string;
+  dob?: Date;
+  wpNo?: string;
+  wpExpDate?: Date;
+  ppIdNumber?: string;
+  ppIdExpDate?: Date;
+  medExpDate?: Date;
+  insuranceNumber?: string;
+  insuranceExpDate?: Date;
+  workSite?: string;
+  workLocation?: string;
+  jobLevel?: string;
+  salary?: string;
+  slot?: string;
+  qtaPaid?: string;
+  sn?: string;
+  visaExpiryDate?: Date;
+  biometricFingerprintUpdated?: Date;
 }
 
 export interface EmployeeAccommodation {
@@ -58,6 +79,39 @@ export interface EmployeeAccommodation {
   bedNumber?: string;
   bedPosition?: 'top' | 'bottom';
   assignedDate?: Date;
+  // Accommodation items
+  accommodationItems?: {
+    bed?: { quantity?: string; lastIssuedDate?: Date };
+    mattress?: { quantity?: string; lastIssuedDate?: Date };
+    bedsheet?: { quantity?: string; lastIssuedDate?: Date };
+    pillow?: { quantity?: string; lastIssuedDate?: Date };
+    pillowCover?: { quantity?: string; lastIssuedDate?: Date };
+  };
+}
+
+export interface SalaryAllowances {
+  basicSalary?: string;
+  otAllowances?: string;
+  otherAllowances?: string;
+  attendanceAllowance?: string;
+  livingAllowance?: string;
+  foodAllowance?: string;
+}
+
+export interface EquipmentItem {
+  name: string;
+  size?: string;
+  quantity?: string;
+  lastIssuedDate?: Date;
+}
+
+export interface StaffEquipment {
+  uniform?: EquipmentItem;
+  rainCoat?: EquipmentItem;
+  keys?: EquipmentItem;
+  mobile?: EquipmentItem;
+  simCard?: EquipmentItem;
+  otherItems?: EquipmentItem[];
 }
 
 export type EmployeeStatus = 'active' | 'resigned' | 'terminated' | 'on_leave';
@@ -823,4 +877,15 @@ export interface AccommodationAssignment {
   notes?: string;
   createdAt: Date;
   updatedAt: Date;
+}
+
+// Work Location Types
+export interface WorkLocation {
+  id?: string;
+  name: string;
+  description?: string;
+  address?: string;
+  assignedStaff: string[];
+  createdAt?: Date;
+  updatedAt?: Date;
 }

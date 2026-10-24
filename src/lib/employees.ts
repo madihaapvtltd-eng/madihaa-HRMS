@@ -1,352 +1,211 @@
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  addDoc,
-  updateDoc,
+import type { Employee } from '../types';
+import { 
+  collection, 
+  doc, 
+  getDoc, 
+  getDocs, 
+  addDoc, 
+  updateDoc, 
   deleteDoc,
   query,
   where,
-  orderBy,
-  limit,
-  Timestamp
+  orderBy
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { Employee } from '../types';
 
-const EMPLOYEES_COLLECTION = 'employees';
-
-// Remove undefined values from object
-const removeUndefined = (obj: any): any => {
-  if (obj === null || obj === undefined) return undefined;
-  if (typeof obj !== 'object') return obj;
+// Utility function to parse various date formats
+export const parseDate = (dateStr: string | undefined): Date | undefined => {
+  if (!dateStr) return undefined;
   
-  if (Array.isArray(obj)) {
-    return obj.map(removeUndefined).filter(val => val !== undefined && val !== null);
-  }
-  
-  const result: any = {};
-  for (const key in obj) {
-    if (obj.hasOwnProperty(key)) {
-      const value = removeUndefined(obj[key]);
-      // Only include if value is not undefined and not null
-      if (value !== undefined && value !== null) {
-        result[key] = value;
-      }
+  // Try DD/MM/YYYY format
+  if (dateStr.includes('/')) {
+    const parts = dateStr.split('/');
+    if (parts.length === 3) {
+      const day = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1; // Months are 0-indexed
+      const year = parseInt(parts[2], 10);
+      
+      // Handle 2-digit years
+      const fullYear = year < 100 ? (year < 50 ? 2000 + year : 1900 + year) : year;
+      
+      const date = new Date(fullYear, month, day);
+      if (!isNaN(date.getTime())) return date;
     }
   }
   
-  return result;
+  // Try DD-MMM-YYYY format
+  const months: { [key: string]: number } = {
+    'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+    'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
+  };
+  
+  const dateMatch = dateStr.match(/(\d{2})-(\w{3})-(\d{4})/);
+  if (dateMatch) {
+    const day = parseInt(dateMatch[1], 10);
+    const month = months[dateMatch[2]];
+    const year = parseInt(dateMatch[3], 10);
+    
+    if (month !== undefined) {
+      const date = new Date(year, month, day);
+      if (!isNaN(date.getTime())) return date;
+    }
+  }
+  
+  // Try standard date parsing
+  const parsed = new Date(dateStr);
+  if (!isNaN(parsed.getTime())) return parsed;
+  
+  return undefined;
+};
+
+// Utility function to calculate duration from join date to current date
+export const calculateDuration = (joinDate: Date | undefined): string => {
+  if (!joinDate) return '';
+  
+  const now = new Date();
+  const diff = now.getTime() - joinDate.getTime();
+  
+  if (diff < 0) return '';
+  
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  const years = Math.floor(days / 365);
+  const remainingDays = days % 365;
+  const months = Math.floor(remainingDays / 30);
+  const finalDays = remainingDays % 30;
+  
+  const parts: string[] = [];
+  if (years > 0) parts.push(`${years}Years`);
+  if (months > 0) parts.push(`${months}Months`);
+  if (finalDays > 0 || parts.length === 0) parts.push(`${finalDays}Days`);
+  
+  return parts.join('');
+};
+
+// Convert Firestore timestamp to Date
+const timestampToDate = (timestamp: any): Date | undefined => {
+  if (!timestamp) return undefined;
+  if (timestamp instanceof Date) return timestamp;
+  if (timestamp._seconds) {
+    return new Date(timestamp._seconds * 1000 + (timestamp._nanoseconds || 0) / 1000000);
+  }
+  if (timestamp.seconds) {
+    return new Date(timestamp.seconds * 1000 + (timestamp.nanoseconds || 0) / 1000000);
+  }
+  // Try parsing as ISO string
+  const parsed = new Date(timestamp);
+  if (!isNaN(parsed.getTime())) return parsed;
+  return undefined;
 };
 
 // Convert Employee to Firestore format
-const employeeToFirestore = (employee: Partial<Employee>): any => {
+const employeeToFirestore = (employee: Partial<Employee>) => {
   const data: any = { ...employee };
-  
-  // Remove undefined values first
-  const cleaned = removeUndefined(data);
-  
-  // Convert Date objects to Timestamps
-  if (cleaned.joinDate && cleaned.joinDate instanceof Date) cleaned.joinDate = Timestamp.fromDate(cleaned.joinDate);
-  if (cleaned.contractEndDate && cleaned.contractEndDate instanceof Date) cleaned.contractEndDate = Timestamp.fromDate(cleaned.contractEndDate);
-  if (cleaned.createdAt && cleaned.createdAt instanceof Date) cleaned.createdAt = Timestamp.fromDate(cleaned.createdAt);
-  if (cleaned.updatedAt && cleaned.updatedAt instanceof Date) cleaned.updatedAt = Timestamp.fromDate(cleaned.updatedAt);
-  
-  // Convert nested Date objects
-  if (cleaned.employmentHistory && Array.isArray(cleaned.employmentHistory)) {
-    cleaned.employmentHistory = cleaned.employmentHistory.map((record: any) => ({
-      ...record,
-      effectiveDate: record.effectiveDate instanceof Date ? Timestamp.fromDate(record.effectiveDate) : record.effectiveDate
-    }));
-  }
-  
-  if (cleaned.education && Array.isArray(cleaned.education)) {
-    cleaned.education = cleaned.education.map((edu: any) => ({
-      ...edu,
-      startDate: edu.startDate instanceof Date ? Timestamp.fromDate(edu.startDate) : edu.startDate,
-      endDate: edu.endDate instanceof Date ? Timestamp.fromDate(edu.endDate) : edu.endDate
-    }));
-  }
-  
-  if (cleaned.documents && Array.isArray(cleaned.documents)) {
-    cleaned.documents = cleaned.documents.map((doc: any) => ({
-      ...doc,
-      uploadedAt: doc.uploadedAt instanceof Date ? Timestamp.fromDate(doc.uploadedAt) : doc.uploadedAt,
-      expiryDate: doc.expiryDate instanceof Date ? Timestamp.fromDate(doc.expiryDate) : doc.expiryDate
-    }));
-  }
-  
-  if (cleaned.assets && Array.isArray(cleaned.assets)) {
-    cleaned.assets = cleaned.assets.map((asset: any) => ({
-      ...asset,
-      assignedDate: asset.assignedDate instanceof Date ? Timestamp.fromDate(asset.assignedDate) : asset.assignedDate,
-      returnDate: asset.returnDate instanceof Date ? Timestamp.fromDate(asset.returnDate) : asset.returnDate
-    }));
-  }
-  
-  // Convert accommodation assignedDate
-  if (cleaned.accommodation && cleaned.accommodation.assignedDate) {
-    cleaned.accommodation.assignedDate = cleaned.accommodation.assignedDate instanceof Date 
-      ? Timestamp.fromDate(cleaned.accommodation.assignedDate) 
-      : cleaned.accommodation.assignedDate;
-  }
-  
-  // Remove undefined values again after conversions
-  return removeUndefined(cleaned);
+  // Remove undefined values
+  Object.keys(data).forEach(key => {
+    if (data[key] === undefined) {
+      delete data[key];
+    }
+  });
+  return data;
 };
 
-// Convert Firestore to Employee format
-const employeeFromFirestore = (data: any): Employee => {
-  const employee = { ...data };
-  
-  // Map old field names to new field names (for migrated data)
-  // Old CSV import fields -> New Employee type fields
-  if (!employee.firstName && employee.name) {
-    const nameParts = employee.name.split(' ');
-    employee.firstName = nameParts[0] || '';
-    employee.lastName = nameParts.slice(1).join(' ') || '';
-  }
-  
-  // Also try to split fullName if firstName is missing
-  if (!employee.firstName && employee.fullName) {
-    const nameParts = employee.fullName.split(' ');
-    employee.firstName = nameParts[0] || '';
-    employee.lastName = nameParts.slice(1).join(' ') || '';
-  }
-  
-  // Map wpNo to employeeId if employeeId is missing
-  if (!employee.employeeId && employee.wpNo) {
-    employee.employeeId = employee.wpNo;
-  }
-  
-  // Map EMP ID to employeeId if employeeId is still missing
-  if (!employee.employeeId && employee['EMP ID']) {
-    employee.employeeId = employee['EMP ID'];
-  }
-  
-  // Map jobLevel to designation if designation is missing
-  if (!employee.designation && employee.jobLevel) {
-    employee.designation = employee.jobLevel;
-  }
-  
-  // Map location to department if department is missing
-  if (!employee.department && employee.location) {
-    employee.department = employee.location;
-  }
-  
-  // Map workSite to department if department is still missing
-  if (!employee.department && employee.workSite) {
-    employee.department = employee.workSite;
-  }
-  
-  // Map various join date field names
-  if (!employee.joinDate && employee.joiningDate) {
-    employee.joinDate = employee.joiningDate;
-  }
-  if (!employee.joinDate && employee.dateJoined) {
-    employee.joinDate = employee.dateJoined;
-  }
-  if (!employee.joinDate && employee.joining) {
-    employee.joinDate = employee.joining;
-  }
-  if (!employee.joinDate && employee.dateOfJoining) {
-    employee.joinDate = employee.dateOfJoining;
-  }
-  if (!employee.joinDate && employee.doj) {
-    employee.joinDate = employee.doj;
-  }
-  
-  // If joinDate is still missing or empty object, try to infer from other date fields
-  if (!employee.joinDate || 
-      (typeof employee.joinDate === 'object' && 
-       !employee.joinDate.toDate && // Not a Firestore Timestamp
-       Object.keys(employee.joinDate).length === 0)) { // Empty object
-    // Try qtaPaid as a fallback (seems to be a date field in the data)
-    if (employee.qtaPaid && employee.qtaPaid !== 'N/A' && employee.qtaPaid !== '') {
-      employee.joinDate = employee.qtaPaid;
-    }
-    // Try signingDate from contractDetails
-    if (employee.contractDetails?.signingDate) {
-      employee.joinDate = employee.contractDetails.signingDate;
-    }
-    // Try contractStartDate from contractDetails
-    if (employee.contractDetails?.contractStartDate) {
-      employee.joinDate = employee.contractDetails.contractStartDate;
-    }
-    // If still no joinDate, leave it undefined (will be handled by defaults)
-  }
-  
-  // Ensure required fields have defaults
-  if (!employee.firstName) employee.firstName = '';
-  if (!employee.lastName) employee.lastName = '';
-  if (!employee.fullName) employee.fullName = `${employee.firstName || ''} ${employee.lastName || ''}`.trim();
-  if (!employee.email) employee.email = '';
-  if (!employee.phone) employee.phone = '';
-  if (!employee.photo) employee.photo = '';
-  if (!employee.employeeId) employee.employeeId = '';
-  if (!employee.registrationNumber) employee.registrationNumber = '';
-  if (!employee.department) employee.department = '';
-  if (!employee.designation) employee.designation = '';
-  if (!employee.status) employee.status = 'active';
-  if (!employee.emergencyContact) employee.emergencyContact = { name: '', relationship: '', phone: '' };
-  if (!employee.employmentHistory) employee.employmentHistory = [];
-  if (!employee.education) employee.education = [];
-  if (!employee.medicalInfo) employee.medicalInfo = {};
-  if (!employee.documents) employee.documents = [];
-  if (!employee.assets) employee.assets = [];
-  
-  // Convert Timestamps to Date objects (handle Date, Timestamp, and string)
-  const convertToDate = (value: any): Date | undefined => {
-    if (!value) return undefined;
-    if (value instanceof Date) return value;
-    if (typeof value === 'string') {
-      // Try parsing the date string
-      const parsed = new Date(value);
-      if (!isNaN(parsed.getTime())) return parsed;
-      
-      // Try parsing formats like "1-Apr-2027"
-      const months: { [key: string]: number } = {
-        'jan': 0, 'feb': 1, 'mar': 2, 'apr': 3, 'may': 4, 'jun': 5,
-        'jul': 6, 'aug': 7, 'sep': 8, 'oct': 9, 'nov': 10, 'dec': 11
-      };
-      const parts = value.split('-');
-      if (parts.length === 3) {
-        const day = parseInt(parts[0]);
-        const monthStr = parts[1].toLowerCase().substring(0, 3);
-        const year = parseInt(parts[2]);
-        if (months[monthStr] !== undefined && !isNaN(day) && !isNaN(year)) {
-          const date = new Date(year, months[monthStr], day);
-          if (!isNaN(date.getTime())) return date;
-        }
-      }
-      
-      // Try parsing DD/MM/YY or DD/MM/YYYY format (e.g., "28/04/1994", "21/02/13")
-      const slashParts = value.split('/');
-      if (slashParts.length === 3) {
-        const day = parseInt(slashParts[0]);
-        const month = parseInt(slashParts[1]) - 1; // Months are 0-indexed
-        let year = parseInt(slashParts[2]);
-        
-        // Handle 2-digit years (e.g., "13" -> 2013)
-        if (year < 100) {
-          year += year < 50 ? 2000 : 1900;
-        }
-        
-        if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
-          const date = new Date(year, month, day);
-          if (!isNaN(date.getTime())) return date;
-        }
-      }
-      
-      return undefined;
-    }
-    if (value.toDate) return value.toDate();
-    return undefined;
+// Convert Firestore document to Employee
+const firestoreToEmployee = (doc: any): Employee => {
+  const data = doc.data();
+  return {
+    id: doc.id,
+    employeeId: data.employeeId || '',
+    registrationNumber: data.registrationNumber || '',
+    firstName: data.firstName || '',
+    lastName: data.lastName || '',
+    fullName: data.fullName || '',
+    email: data.email || '',
+    phone: data.phone || '',
+    photo: data.photo || '',
+    department: data.department || '',
+    designation: data.designation || '',
+    status: data.status || 'active',
+    joinDate: timestampToDate(data.joinDate) || new Date(),
+    contractEndDate: timestampToDate(data.contractEndDate),
+    emergencyContact: data.emergencyContact || { name: '', relationship: '', phone: '' },
+    employmentHistory: data.employmentHistory || [],
+    education: data.education || [],
+    medicalInfo: data.medicalInfo || {},
+    documents: data.documents || [],
+    assets: data.assets || [],
+    contractDetails: data.contractDetails,
+    probationDetails: data.probationDetails,
+    accommodation: data.accommodation,
+    salaryAllowances: data.salaryAllowances,
+    staffEquipment: data.staffEquipment,
+    createdAt: timestampToDate(data.createdAt) || new Date(),
+    updatedAt: timestampToDate(data.updatedAt) || new Date(),
+    // Additional fields
+    country: data.country,
+    dob: timestampToDate(data.dob),
+    wpNo: data.wpNo,
+    wpExpDate: timestampToDate(data.wpExpDate),
+    ppIdNumber: data.ppIdNumber,
+    ppIdExpDate: timestampToDate(data.ppIdExpDate),
+    visaExpiryDate: timestampToDate(data.visaExpiryDate),
+    medExpDate: timestampToDate(data.medExpDate),
+    insuranceNumber: data.insuranceNumber,
+    insuranceExpDate: timestampToDate(data.insuranceExpDate),
+    workSite: data.workSite,
+    workLocation: data.workLocation,
+    jobLevel: data.jobLevel,
+    salary: data.salary,
+    slot: data.slot,
+    qtaPaid: data.qtaPaid,
+    sn: data.sn,
+    biometricFingerprintUpdated: timestampToDate(data.biometricFingerprintUpdated),
   };
-  
-  employee.joinDate = convertToDate(employee.joinDate);
-  employee.contractEndDate = convertToDate(employee.contractEndDate);
-  employee.createdAt = convertToDate(employee.createdAt) || new Date();
-  employee.updatedAt = convertToDate(employee.updatedAt) || new Date();
-  
-  // Convert nested Timestamps
-  if (employee.employmentHistory) {
-    employee.employmentHistory = employee.employmentHistory.map((record: any) => ({
-      ...record,
-      effectiveDate: convertToDate(record.effectiveDate) || new Date()
-    }));
-  }
-  
-  if (employee.education) {
-    employee.education = employee.education.map((edu: any) => ({
-      ...edu,
-      startDate: convertToDate(edu.startDate) || new Date(),
-      endDate: convertToDate(edu.endDate) || new Date()
-    }));
-  }
-  
-  if (employee.documents) {
-    employee.documents = employee.documents.map((doc: any) => ({
-      ...doc,
-      uploadedAt: convertToDate(doc.uploadedAt) || new Date(),
-      expiryDate: convertToDate(doc.expiryDate)
-    }));
-  }
-  
-  if (employee.assets) {
-    employee.assets = employee.assets.map((asset: any) => ({
-      ...asset,
-      assignedDate: convertToDate(asset.assignedDate) || new Date(),
-      returnDate: convertToDate(asset.returnDate)
-    }));
-  }
-  
-  // Convert accommodation assignedDate
-  if (employee.accommodation && employee.accommodation.assignedDate) {
-    employee.accommodation.assignedDate = convertToDate(employee.accommodation.assignedDate);
-  }
-  
-  return employee as Employee;
 };
 
 // Get all employees with optional limit
 export const getEmployees = async (limitCount?: number) => {
   try {
-    const q = limitCount 
-      ? query(
-          collection(db, EMPLOYEES_COLLECTION),
-          orderBy('createdAt', 'desc'),
-          limit(limitCount)
-        )
-      : query(
-          collection(db, EMPLOYEES_COLLECTION),
-          orderBy('createdAt', 'desc')
-        );
+    const q = query(collection(db, 'employees'), orderBy('createdAt', 'desc'));
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
-      ...employeeFromFirestore(doc.data()),
-      id: doc.id,
-    }));
+    let employees = querySnapshot.docs.map(firestoreToEmployee);
+    
+    if (limitCount) {
+      employees = employees.slice(0, limitCount);
+    }
+    
+    return employees;
   } catch (error) {
     console.error('Error fetching employees:', error);
-    throw error;
+    return [];
   }
 };
 
 // Get employee by ID
 export const getEmployeeById = async (id: string) => {
   try {
-    const docRef = doc(db, EMPLOYEES_COLLECTION, id);
+    const docRef = doc(db, 'employees', id);
     const docSnap = await getDoc(docRef);
     
     if (docSnap.exists()) {
-      return {
-        ...(employeeFromFirestore(docSnap.data()) as Omit<Employee, 'id'>),
-        id: docSnap.id,
-      } as Employee;
+      return firestoreToEmployee(docSnap);
     }
     return null;
   } catch (error) {
     console.error('Error fetching employee:', error);
-    throw error;
+    return null;
   }
 };
 
 // Create employee
 export const createEmployee = async (employee: Partial<Employee>) => {
   try {
-    const newEmployee = {
+    const data = employeeToFirestore({
       ...employee,
       createdAt: new Date(),
       updatedAt: new Date()
-    };
+    });
     
-    const docRef = await addDoc(
-      collection(db, EMPLOYEES_COLLECTION),
-      employeeToFirestore(newEmployee)
-    );
-    
+    const docRef = await addDoc(collection(db, 'employees'), data);
     return docRef.id;
   } catch (error) {
     console.error('Error creating employee:', error);
@@ -357,9 +216,13 @@ export const createEmployee = async (employee: Partial<Employee>) => {
 // Update employee
 export const updateEmployee = async (id: string, data: Partial<Employee>) => {
   try {
-    const firestoreData = employeeToFirestore(data);
-    const employeeRef = doc(db, 'employees', id);
-    await updateDoc(employeeRef, firestoreData);
+    const docRef = doc(db, 'employees', id);
+    const updateData = employeeToFirestore({
+      ...data,
+      updatedAt: new Date()
+    });
+    
+    await updateDoc(docRef, updateData);
   } catch (error) {
     console.error('Error updating employee:', error);
     throw error;
@@ -369,7 +232,8 @@ export const updateEmployee = async (id: string, data: Partial<Employee>) => {
 // Delete employee
 export const deleteEmployee = async (id: string) => {
   try {
-    await deleteDoc(doc(db, EMPLOYEES_COLLECTION, id));
+    const docRef = doc(db, 'employees', id);
+    await deleteDoc(docRef);
   } catch (error) {
     console.error('Error deleting employee:', error);
     throw error;
@@ -398,37 +262,23 @@ export const searchEmployees = async (searchTerm: string) => {
 // Get employees by department
 export const getEmployeesByDepartment = async (department: string) => {
   try {
-    const q = query(
-      collection(db, EMPLOYEES_COLLECTION),
-      where('department', '==', department),
-      orderBy('fullName')
-    );
+    const q = query(collection(db, 'employees'), where('department', '==', department));
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
-      ...employeeFromFirestore(doc.data()),
-      id: doc.id,
-    }));
+    return querySnapshot.docs.map(firestoreToEmployee);
   } catch (error) {
     console.error('Error fetching employees by department:', error);
-    throw error;
+    return [];
   }
 };
 
 // Get employees by status
 export const getEmployeesByStatus = async (status: string) => {
   try {
-    const q = query(
-      collection(db, EMPLOYEES_COLLECTION),
-      where('status', '==', status),
-      orderBy('fullName')
-    );
+    const q = query(collection(db, 'employees'), where('status', '==', status));
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
-      ...employeeFromFirestore(doc.data()),
-      id: doc.id,
-    }));
+    return querySnapshot.docs.map(firestoreToEmployee);
   } catch (error) {
     console.error('Error fetching employees by status:', error);
-    throw error;
+    return [];
   }
 };

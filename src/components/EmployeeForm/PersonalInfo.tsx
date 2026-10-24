@@ -30,6 +30,22 @@ export const PersonalInfo = ({ employee, onNext, onCancel, onSave }: PersonalInf
         registrationNumber: employee.registrationNumber || '',
         photo: employee.photo || '',
         status: employee.status || 'active',
+        country: employee.country || '',
+        dob: employee.dob,
+        wpNo: employee.wpNo || '',
+        wpExpDate: employee.wpExpDate,
+        ppIdNumber: employee.ppIdNumber || '',
+        ppIdExpDate: employee.ppIdExpDate,
+        medExpDate: employee.medExpDate,
+        insuranceNumber: employee.insuranceNumber || '',
+        insuranceExpDate: employee.insuranceExpDate,
+        workSite: employee.workSite || '',
+        workLocation: employee.workLocation || '',
+        jobLevel: employee.jobLevel || '',
+        salary: employee.salary || '',
+        slot: employee.slot || '',
+        qtaPaid: employee.qtaPaid || '',
+        sn: employee.sn || '',
       });
     }
   }, [employee]);
@@ -38,8 +54,8 @@ export const PersonalInfo = ({ employee, onNext, onCancel, onSave }: PersonalInf
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    if (name === 'joinDate') {
-      setFormData(prev => ({ ...prev, [name]: new Date(value) }));
+    if (name === 'joinDate' || name === 'dob' || name === 'wpExpDate' || name === 'ppIdExpDate' || name === 'medExpDate' || name === 'insuranceExpDate') {
+      setFormData(prev => ({ ...prev, [name]: value ? new Date(value) : null }));
     } else if (name === 'status') {
       setFormData(prev => ({ ...prev, [name]: value.toLowerCase() as any }));
     } else {
@@ -152,7 +168,7 @@ export const PersonalInfo = ({ employee, onNext, onCancel, onSave }: PersonalInf
             name="employeeId"
             value={formData.employeeId}
             onChange={handleChange}
-            placeholder="e.g., EMP001"
+            placeholder="e.g., MAD0001"
           />
           <Input
             label="Registration Number"
@@ -191,11 +207,123 @@ export const PersonalInfo = ({ employee, onNext, onCancel, onSave }: PersonalInf
             placeholder="Enter designation"
           />
           <Input
+            label="Job Level"
+            name="jobLevel"
+            value={formData.jobLevel}
+            onChange={handleChange}
+            placeholder="e.g., Junior, Senior"
+          />
+          <Input
+            label="Country"
+            name="country"
+            value={formData.country}
+            onChange={handleChange}
+            placeholder="Enter country"
+          />
+          <Input
             label="Join Date"
             name="joinDate"
             type="date"
-            value={formData.joinDate?.toISOString().split('T')[0]}
+            value={formData.joinDate?.toISOString().split('T')[0] || ''}
             onChange={handleChange}
+          />
+          <Input
+            label="Date of Birth"
+            name="dob"
+            type="date"
+            value={formData.dob?.toISOString().split('T')[0] || ''}
+            onChange={handleChange}
+          />
+          <Input
+            label="Work Permit Number"
+            name="wpNo"
+            value={formData.wpNo}
+            onChange={handleChange}
+            placeholder="e.g., WP00648199"
+          />
+          <Input
+            label="Work Permit Expiry Date"
+            name="wpExpDate"
+            type="date"
+            value={formData.wpExpDate?.toISOString().split('T')[0] || ''}
+            onChange={handleChange}
+          />
+          <Input
+            label="Passport/ID Number"
+            name="ppIdNumber"
+            value={formData.ppIdNumber}
+            onChange={handleChange}
+            placeholder="Enter passport/ID number"
+          />
+          <Input
+            label="Passport/ID Expiry Date"
+            name="ppIdExpDate"
+            type="date"
+            value={formData.ppIdExpDate?.toISOString().split('T')[0] || ''}
+            onChange={handleChange}
+          />
+          <Input
+            label="Medical Expiry Date"
+            name="medExpDate"
+            type="date"
+            value={formData.medExpDate?.toISOString().split('T')[0] || ''}
+            onChange={handleChange}
+          />
+          <Input
+            label="Insurance Number"
+            name="insuranceNumber"
+            value={formData.insuranceNumber}
+            onChange={handleChange}
+            placeholder="Enter insurance number"
+          />
+          <Input
+            label="Insurance Expiry Date"
+            name="insuranceExpDate"
+            type="date"
+            value={formData.insuranceExpDate?.toISOString().split('T')[0] || ''}
+            onChange={handleChange}
+          />
+          <Input
+            label="Work Site"
+            name="workSite"
+            value={formData.workSite}
+            onChange={handleChange}
+            placeholder="Enter work site"
+          />
+          <Input
+            label="Work Location"
+            name="workLocation"
+            value={formData.workLocation}
+            onChange={handleChange}
+            placeholder="Enter work location"
+          />
+          <Input
+            label="Salary"
+            name="salary"
+            value={formData.salary}
+            onChange={handleChange}
+            placeholder="e.g., 134.54 MVR"
+          />
+          <Input
+            label="Slot"
+            name="slot"
+            value={formData.slot}
+            onChange={handleChange}
+            placeholder="Enter slot"
+          />
+          <Input
+            label="QTA Paid"
+            name="qtaPaid"
+            value={formData.qtaPaid}
+            onChange={handleChange}
+            placeholder="Enter QTA paid date"
+          />
+          <Input
+            label="Serial Number"
+            name="sn"
+            value={formData.sn}
+            onChange={handleChange}
+            placeholder="Enter serial number"
           />
           <div>
             <label className="block text-sm font-medium text-secondary-700 mb-2">Status</label>

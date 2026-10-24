@@ -105,7 +105,7 @@ export const Login: React.FC = () => {
         </div>
 
         <div className="mt-4 text-center text-sm text-secondary-600">
-          <p>© 2024 Male' Water and Sewerage Company. All rights reserved.</p>
+          <p>© 2024 Madihaa HRMS. All rights reserved.</p>
         </div>
       </motion.div>
     </div>

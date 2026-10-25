@@ -274,7 +274,7 @@ export interface LeaveRequest {
   balanceAdjusted?: boolean;
 }
 
-export type LeaveType = 'annual' | 'medical' | 'emergency' | 'duty' | 'unpaid' | 'maternity' | 'paternity' | 'compassionate';
+export type LeaveType = 'annual' | 'medical' | 'emergency' | 'duty' | 'unpaid' | 'maternity' | 'paternity' | 'compassionate' | 'off_day';
 export type LeaveStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
 
 export interface LeaveApproval {

@@ -19,25 +19,42 @@ const LEAVE_BALANCES_COLLECTION = 'leave_balances';
 // Leave Request functions
 export const getLeaveRequests = async (employeeId?: string) => {
   try {
-    let q = query(collection(db, LEAVE_REQUESTS_COLLECTION), orderBy('appliedDate', 'desc'));
+    let q;
     
     if (employeeId) {
-      q = query(q, where('employeeId', '==', employeeId));
+      // Query with employeeId filter - no orderBy to avoid index requirement
+      q = query(
+        collection(db, LEAVE_REQUESTS_COLLECTION),
+        where('employeeId', '==', employeeId)
+      );
+    } else {
+      // Query without filter - can use orderBy
+      q = query(collection(db, LEAVE_REQUESTS_COLLECTION), orderBy('appliedDate', 'desc'));
     }
     
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-      startDate: doc.data().startDate.toDate(),
-      endDate: doc.data().endDate.toDate(),
-      appliedDate: doc.data().appliedDate.toDate(),
-      amendedDate: doc.data().amendedDate?.toDate(),
-      approvals: doc.data().approvals?.map((approval: any) => ({
-        ...approval,
-        actionDate: approval.actionDate?.toDate()
-      }))
-    })) as LeaveRequest[];
+    const requests = querySnapshot.docs.map(doc => {
+      const data = doc.data() as any;
+      return {
+        id: doc.id,
+        ...data,
+        startDate: data.startDate?.toDate(),
+        endDate: data.endDate?.toDate(),
+        appliedDate: data.appliedDate?.toDate(),
+        amendedDate: data.amendedDate?.toDate(),
+        approvals: data.approvals?.map((approval: any) => ({
+          ...approval,
+          actionDate: approval.actionDate?.toDate()
+        }))
+      } as LeaveRequest;
+    });
+    
+    // Sort client-side if we filtered by employeeId
+    if (employeeId) {
+      requests.sort((a, b) => b.appliedDate.getTime() - a.appliedDate.getTime());
+    }
+    
+    return requests;
   } catch (error) {
     console.error('Error fetching leave requests:', error);
     throw error;

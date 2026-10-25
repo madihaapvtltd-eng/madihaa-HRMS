@@ -4,7 +4,7 @@ import {
   Menu, X, Bell, User, LogOut, Settings,
   LayoutDashboard, Users, Calendar, CalendarCheck, 
   DollarSign, Clock, BarChart, FileText, GraduationCap,
-  Trophy, RefreshCw, UserCog, Building2, MapPin, Network
+  Trophy, RefreshCw, UserCog, Building2, MapPin, Network, CalendarDays
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../ui/Button';
@@ -19,6 +19,7 @@ export const Layout: React.FC = () => {
     { name: 'Employees', href: '/employees', icon: Users },
     { name: 'Attendance', href: '/attendance', icon: Calendar },
     { name: 'Leave', href: '/leave', icon: CalendarCheck },
+    { name: 'Friday Duty', href: '/friday-duty', icon: CalendarDays },
     { name: 'Payroll', href: '/payroll', icon: DollarSign },
     { name: 'Overtime', href: '/overtime', icon: Clock },
     { name: 'Reports', href: '/reports', icon: BarChart },

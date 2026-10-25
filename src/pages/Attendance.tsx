@@ -31,6 +31,7 @@ export const Attendance = () => {
   const [loadingAttendance, setLoadingAttendance] = useState(false);
   const [employees, setEmployees] = useState<any[]>([]);
   const [workLocations, setWorkLocations] = useState<any[]>([]);
+  const [missingStaff, setMissingStaff] = useState<any[]>([]);
 
   const loadTodayStats = useCallback(async () => {
     try {
@@ -159,8 +160,9 @@ export const Attendance = () => {
         const jsonData = XLSX.utils.sheet_to_json(sheet, { raw: false });
         
         // Process attendance data to group by employee and find first/last punch
-        const processedData = processAttendanceData(jsonData);
-        setAttendanceData(processedData);
+        const { attendanceRecords, missingStaff } = processAttendanceData(jsonData);
+        setAttendanceData(attendanceRecords);
+        setMissingStaff(missingStaff);
       } catch (error) {
         console.error('Error parsing Excel file:', error);
         alert('Failed to parse Excel file');
@@ -173,6 +175,7 @@ export const Attendance = () => {
 
   const processAttendanceData = (rawData: any[]) => {
     const employeeMap = new Map<string, any>();
+    const punchedEmployeeIds = new Set<string>();
     
     rawData.forEach((row: any) => {
       const empId = row['User No.'];
@@ -226,6 +229,7 @@ export const Attendance = () => {
       );
       
       if (employee) {
+        punchedEmployeeIds.add(employee.id);
         // Find work location for this employee
         const location = workLocations.find(loc => 
           loc.assignedStaff?.includes(employee.id)
@@ -240,7 +244,34 @@ export const Attendance = () => {
       }
     });
     
-    return Array.from(employeeMap.values());
+    // Find missing staff (employees assigned to work locations who didn't punch)
+    const missingStaff = employees
+      .filter(emp => {
+        // Only active employees assigned to a work location
+        if (emp.status !== 'active') return false;
+        const hasLocation = workLocations.some(loc => loc.assignedStaff?.includes(emp.id));
+        if (!hasLocation) return false;
+        // Didn't punch today
+        return !punchedEmployeeIds.has(emp.id);
+      })
+      .map(emp => {
+        const location = workLocations.find(loc => loc.assignedStaff?.includes(emp.id));
+        return {
+          empId: emp.employeeId,
+          name: emp.fullName,
+          department: emp.department || 'N/A',
+          workLocation: location?.name || 'Unassigned',
+          workLocationId: location?.id,
+          employeeId: emp.id,
+          isMissing: true,
+          firstPunch: null,
+          lastPunch: null,
+          totalPunches: 0
+        };
+      });
+    
+    const attendanceRecords = Array.from(employeeMap.values());
+    return { attendanceRecords, missingStaff };
   };
 
   const parseExcelDateString = (dateStr: string): Date => {
@@ -492,6 +523,45 @@ export const Attendance = () => {
             </div>
           ) : attendanceData.length > 0 ? (
             <div className="space-y-6">
+              {/* Missing Staff Section */}
+              {missingStaff.length > 0 && (
+                <div className="border-2 border-red-200 rounded-lg overflow-hidden bg-red-50">
+                  <div className="bg-red-100 px-4 py-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-5 h-5 text-red-600" />
+                      <h3 className="font-semibold text-red-900">Missing Staff - Didn't Punch Today</h3>
+                    </div>
+                    <span className="text-sm text-red-700 font-medium">{missingStaff.length} employees</span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-red-200 bg-red-50">
+                          <th className="text-left py-3 px-4 text-sm font-medium text-red-700">Employee ID</th>
+                          <th className="text-left py-3 px-4 text-sm font-medium text-red-700">Name</th>
+                          <th className="text-left py-3 px-4 text-sm font-medium text-red-700">Department</th>
+                          <th className="text-left py-3 px-4 text-sm font-medium text-red-700">Work Location</th>
+                          <th className="text-left py-3 px-4 text-sm font-medium text-red-700">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {missingStaff.map((emp: any, index: number) => (
+                          <tr key={index} className="border-b border-red-100 hover:bg-red-100">
+                            <td className="py-3 px-4 text-sm text-red-900">{emp.empId}</td>
+                            <td className="py-3 px-4 text-sm text-red-900">{emp.name}</td>
+                            <td className="py-3 px-4 text-sm text-red-900">{emp.department}</td>
+                            <td className="py-3 px-4 text-sm text-red-900">{emp.workLocation}</td>
+                            <td className="py-3 px-4 text-sm">
+                              <span className="bg-red-200 text-red-800 px-2 py-1 rounded text-xs font-semibold">No Punch</span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
               {/* Group by Work Location */}
               {(() => {
                 const groupedByLocation = attendanceData.reduce((acc, emp) => {

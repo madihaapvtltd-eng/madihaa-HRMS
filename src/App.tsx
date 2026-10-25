@@ -20,6 +20,7 @@ import { UserManagement } from './pages/UserManagement';
 import { AccommodationPage } from './pages/Accommodation';
 import { WorkLocationPage } from './pages/WorkLocation';
 import { OrganizationChart } from './pages/OrganizationChart';
+import { FridayDuty } from './pages/FridayDuty';
 
 function App() {
   return (
@@ -53,6 +54,7 @@ function App() {
             <Route path="accommodation" element={<AccommodationPage />} />
             <Route path="work-locations" element={<WorkLocationPage />} />
             <Route path="organization-chart" element={<OrganizationChart />} />
+            <Route path="friday-duty" element={<FridayDuty />} />
             <Route path="users" element={<UserManagement />} />
             <Route path="settings" element={<div className="p-4">Settings Module - Coming Soon</div>} />
           </Route>

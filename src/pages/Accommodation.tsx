@@ -90,9 +90,12 @@ export const AccommodationPage = () => {
     if (!window.confirm('Are you sure you want to delete this floor? This will delete all rooms and beds.')) return;
     
     try {
+      console.log('Deleting floor with ID:', id);
       await deleteFloor(id);
+      console.log('Floor deleted successfully');
       loadAccommodations();
     } catch (error) {
+      console.error('Error deleting floor:', error);
       alert('Failed to delete floor: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   };
@@ -624,18 +627,18 @@ export const AccommodationPage = () => {
                                               </div>
                                               <div className="flex items-center gap-1">
                                                 <Button variant="secondary" size="sm" onClick={() => openModal('bed', { ...bed, roomId: room.id })}>
-                                                  <Edit className="w-2 h-2" />
+                                                  <Edit className="w-3 h-3" />
                                                 </Button>
                                                 <Button variant="secondary" size="sm" onClick={() => handleDeleteBed(bed.id)}>
-                                                  <Trash2 className="w-2 h-2" />
+                                                  <Trash2 className="w-3 h-3" />
                                                 </Button>
                                                 {bed.assignedEmployeeId ? (
                                                   <Button variant="secondary" size="sm" onClick={() => handleUnassignEmployee(bed)}>
-                                                    <User className="w-2 h-2" />
+                                                    <User className="w-3 h-3" />
                                                   </Button>
                                                 ) : (
                                                   <Button variant="secondary" size="sm" onClick={() => openModal('assign', { ...bed, accommodationId: accommodation.id, floorId: floor.id, roomId: room.id })}>
-                                                    <User className="w-2 h-2" />
+                                                    <User className="w-3 h-3" />
                                                   </Button>
                                                 )}
                                               </div>

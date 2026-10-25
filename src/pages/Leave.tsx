@@ -5,6 +5,7 @@ import { Button } from '../components/ui/Button';
 import { Card, CardContent } from '../components/ui/Card';
 import { createLeaveRequest, cancelLeaveRequest, getLeaveRequests, getLeaveBalance, validateLeaveRequest, calculateLeaveDays } from '../lib/leave';
 import { useAuth } from '../contexts/AuthContext';
+import { getEmployees } from '../lib/employees';
 import type { LeaveRequest, LeaveBalance, LeaveType } from '../types';
 
 export const Leave = () => {
@@ -21,17 +22,25 @@ export const Leave = () => {
   const [newDays, setNewDays] = useState(1);
   const [leaveErrors, setLeaveErrors] = useState<string[]>([]);
   const [submittingLeave, setSubmittingLeave] = useState(false);
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
+  const [employeeSearch, setEmployeeSearch] = useState('');
 
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const requests = await getLeaveRequests(user?.employeeId);
+      const requests = await getLeaveRequests();
       setLeaveRequests(requests);
       
+      // Only load balance for logged-in user if they have an employeeId
       if (user?.employeeId) {
         const balance = await getLeaveBalance(user.employeeId, new Date().getFullYear());
         setLeaveBalance(balance);
       }
+
+      // Load employees for dropdown
+      const empData = await getEmployees();
+      setEmployees(empData);
     } catch (error) {
       console.error('Error loading leave data:', error);
     } finally {
@@ -68,10 +77,13 @@ export const Leave = () => {
   };
 
   const handleLeaveSubmit = async () => {
-    if (!user?.employeeId) return;
+    if (!selectedEmployeeId) {
+      setLeaveErrors(['Please select an employee']);
+      return;
+    }
 
     const request = {
-      employeeId: user.employeeId,
+      employeeId: selectedEmployeeId,
       type: newLeaveType,
       startDate: new Date(newStartDate),
       endDate: new Date(newEndDate),
@@ -93,6 +105,7 @@ export const Leave = () => {
       setNewEndDate('');
       setNewReason('');
       setNewDays(1);
+      setSelectedEmployeeId('');
       setLeaveErrors([]);
       setShowLeaveForm(false);
       loadData();
@@ -122,6 +135,7 @@ export const Leave = () => {
     maternity: 'bg-pink-100 text-pink-800',
     paternity: 'bg-cyan-100 text-cyan-800',
     compassionate: 'bg-amber-100 text-amber-800',
+    off_day: 'bg-indigo-100 text-indigo-800',
   };
 
   if (loading) {
@@ -151,6 +165,33 @@ export const Leave = () => {
           <CardContent className="p-4">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
+                <label className="block text-sm font-medium text-secondary-700 mb-1">Employee</label>
+                <input
+                  type="text"
+                  placeholder="Search employee..."
+                  value={employeeSearch}
+                  onChange={(e) => setEmployeeSearch(e.target.value)}
+                  className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 mb-2"
+                />
+                <select
+                  value={selectedEmployeeId}
+                  onChange={(e) => setSelectedEmployeeId(e.target.value)}
+                  className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="">Select Employee</option>
+                  {employees
+                    .filter(emp => 
+                      emp.fullName?.toLowerCase().includes(employeeSearch.toLowerCase()) ||
+                      emp.employeeId?.toLowerCase().includes(employeeSearch.toLowerCase())
+                    )
+                    .map(emp => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.fullName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-secondary-700 mb-1">Leave Type</label>
                 <select
                   value={newLeaveType}
@@ -165,6 +206,7 @@ export const Leave = () => {
                   <option value="maternity">Maternity</option>
                   <option value="paternity">Paternity</option>
                   <option value="compassionate">Compassionate</option>
+                  <option value="off_day">Off Day</option>
                 </select>
               </div>
               <div>
@@ -191,6 +233,8 @@ export const Leave = () => {
                   className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                 />
               </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
               <div>
                 <label className="block text-sm font-medium text-secondary-700 mb-1">Days</label>
                 <input
@@ -200,15 +244,15 @@ export const Leave = () => {
                   className="w-full px-4 py-2 border border-secondary-300 rounded-lg bg-secondary-50"
                 />
               </div>
-            </div>
-            <div className="mt-4">
-              <label className="block text-sm font-medium text-secondary-700 mb-1">Reason</label>
-              <textarea
-                value={newReason}
-                onChange={(e) => setNewReason(e.target.value)}
-                rows={3}
-                className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-              />
+              <div className="md:col-span-3">
+                <label className="block text-sm font-medium text-secondary-700 mb-1">Reason</label>
+                <textarea
+                  value={newReason}
+                  onChange={(e) => setNewReason(e.target.value)}
+                  rows={3}
+                  className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
             </div>
 
             {leaveErrors.length > 0 && (
@@ -306,6 +350,9 @@ export const Leave = () => {
             <thead className="bg-secondary-50 border-b border-secondary-200">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-secondary-600 uppercase tracking-wider">
+                  Employee
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-secondary-600 uppercase tracking-wider">
                   Type
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-secondary-600 uppercase tracking-wider">
@@ -326,7 +373,9 @@ export const Leave = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-secondary-200">
-              {filteredRequests.map((request, index) => (
+              {filteredRequests.map((request, index) => {
+                const employee = employees.find(emp => emp.id === request.employeeId);
+                return (
                 <motion.tr
                   key={request.id}
                   initial={{ opacity: 0 }}
@@ -334,6 +383,14 @@ export const Leave = () => {
                   transition={{ delay: index * 0.05 }}
                   className="hover:bg-secondary-50"
                 >
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-medium text-secondary-900">
+                      {employee?.fullName || 'Unknown'}
+                    </div>
+                    <div className="text-xs text-secondary-500">
+                      {employee?.employeeId || request.employeeId}
+                    </div>
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${typeColors[request.type]}`}>
                       {request.type}
@@ -373,7 +430,8 @@ export const Leave = () => {
                     </div>
                   </td>
                 </motion.tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

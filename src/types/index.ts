@@ -886,6 +886,9 @@ export interface WorkLocation {
   description?: string;
   address?: string;
   assignedStaff: string[];
+  lateThresholdSundayToThursday?: string; // Format: "HH:mm" e.g., "09:00"
+  lateThresholdFriday?: string; // Format: "HH:mm" e.g., "10:00"
+  lateThresholdSaturday?: string; // Format: "HH:mm" e.g., "10:00"
   createdAt?: Date;
   updatedAt?: Date;
 }

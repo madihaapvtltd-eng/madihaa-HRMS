@@ -330,9 +330,58 @@ export const Overtime = () => {
         </CardContent>
       </Card>
 
-      {/* Overtime Requests Table */}
+      {/* Overtime Requests */}
       <Card>
-        <div className="overflow-x-auto">
+        {/* Mobile Cards */}
+        <div className="sm:hidden space-y-4 p-4">
+          {filteredRequests.map((request, index) => (
+            <motion.div
+              key={request.id}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: index * 0.05 }}
+              className="bg-white rounded-lg shadow p-4 border border-secondary-200"
+            >
+              <div className="flex justify-between items-start mb-3">
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-secondary-400" />
+                  <span className="font-bold text-secondary-900 text-sm">
+                    {new Date(request.date).toLocaleDateString()}
+                  </span>
+                </div>
+                <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[request.status]}`}>
+                  {request.status}
+                </span>
+              </div>
+              <div className="space-y-2 text-sm mb-4">
+                <div className="flex justify-between">
+                  <span className="text-secondary-600">Time:</span>
+                  <span className="font-medium">{request.startTime} - {request.endTime}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-secondary-600">Hours:</span>
+                  <span className="font-medium">{request.hours}h</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-secondary-600">Requested:</span>
+                  <span className="font-medium">{new Date(request.requestedDate).toLocaleDateString()}</span>
+                </div>
+                <div className="text-secondary-600">
+                  <span className="font-medium">Reason:</span> {request.reason}
+                </div>
+              </div>
+              <div className="flex justify-end space-x-2">
+                <button className="px-3 py-2 bg-primary-600 text-white rounded-lg text-sm flex items-center gap-1">
+                  <Eye className="w-4 h-4" />
+                  View
+                </button>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+
+        {/* Desktop Table */}
+        <div className="hidden sm:block overflow-x-auto">
           <table className="w-full">
             <thead className="bg-secondary-50 border-b border-secondary-200">
               <tr>
@@ -414,14 +463,14 @@ export const Overtime = () => {
               ))}
             </tbody>
           </table>
+
+          {filteredRequests.length === 0 && (
+            <div className="text-center py-12">
+              <Clock className="w-12 h-12 text-secondary-400 mx-auto mb-4" />
+              <p className="text-secondary-600">No overtime requests found</p>
+            </div>
+          )}
         </div>
-        
-        {filteredRequests.length === 0 && (
-          <div className="text-center py-12">
-            <Clock className="w-12 h-12 text-secondary-400 mx-auto mb-4" />
-            <p className="text-secondary-600">No overtime requests found</p>
-          </div>
-        )}
       </Card>
     </div>
   );

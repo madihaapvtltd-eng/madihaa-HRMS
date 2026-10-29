@@ -216,12 +216,69 @@ export const Payroll = () => {
         </div>
       )}
 
-      {/* Payroll Table */}
+      {/* Payroll Details */}
       <Card>
         <CardHeader>
           <h2 className="text-lg font-semibold text-secondary-900">Payroll Details</h2>
         </CardHeader>
-        <div className="overflow-x-auto">
+        
+        {/* Mobile Cards */}
+        <div className="sm:hidden space-y-4 p-4">
+          {payrollData.map((payroll, index) => (
+            <motion.div
+              key={payroll.id}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: index * 0.05 }}
+              className="bg-white rounded-lg shadow p-4 border border-secondary-200"
+            >
+              <div className="flex justify-between items-start mb-3">
+                <div>
+                  <div className="font-bold text-secondary-900 text-sm">{payroll.employeeId}</div>
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                    payroll.status === 'paid' ? 'bg-green-100 text-green-800' :
+                    payroll.status === 'approved' ? 'bg-blue-100 text-blue-800' :
+                    payroll.status === 'processed' ? 'bg-yellow-100 text-yellow-800' :
+                    'bg-gray-100 text-gray-800'
+                  }`}>
+                    {payroll.status}
+                  </span>
+                </div>
+              </div>
+              <div className="space-y-2 text-sm mb-4">
+                <div className="flex justify-between">
+                  <span className="text-secondary-600">Basic Salary:</span>
+                  <span className="font-medium">MVR {payroll.basicSalary.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-secondary-600">Allowances:</span>
+                  <span className="font-medium text-green-600">+MVR {payroll.allowances.reduce((sum: number, a: any) => sum + a.amount, 0).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-secondary-600">Deductions:</span>
+                  <span className="font-medium text-red-600">-MVR {payroll.deductions.reduce((sum: number, d: any) => sum + d.amount, 0).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-secondary-600">Net Salary:</span>
+                  <span className="font-bold text-secondary-900">MVR {payroll.netSalary.toLocaleString()}</span>
+                </div>
+              </div>
+              <div className="flex justify-end space-x-2">
+                <button className="px-3 py-2 bg-primary-600 text-white rounded-lg text-sm flex items-center gap-1">
+                  <FileText className="w-4 h-4" />
+                  View
+                </button>
+                <button className="px-3 py-2 bg-secondary-600 text-white rounded-lg text-sm flex items-center gap-1">
+                  <Download className="w-4 h-4" />
+                  Download
+                </button>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+
+        {/* Desktop Table */}
+        <div className="hidden sm:block overflow-x-auto">
           <table className="w-full">
             <thead className="bg-secondary-50 border-b border-secondary-200">
               <tr>
@@ -296,14 +353,14 @@ export const Payroll = () => {
               ))}
             </tbody>
           </table>
+
+          {payrollData.length === 0 && (
+            <div className="text-center py-12">
+              <Calendar className="w-12 h-12 text-secondary-400 mx-auto mb-4" />
+              <p className="text-secondary-600">No payroll data for this period</p>
+            </div>
+          )}
         </div>
-        
-        {payrollData.length === 0 && (
-          <div className="text-center py-12">
-            <Calendar className="w-12 h-12 text-secondary-400 mx-auto mb-4" />
-            <p className="text-secondary-600">No payroll data for this period</p>
-          </div>
-        )}
       </Card>
     </div>
   );

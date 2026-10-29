@@ -128,19 +128,6 @@ export const OrganizationChart = () => {
     setIsDragging(false);
   };
 
-  const handleZoomIn = () => {
-    setScale(prev => Math.min(2, prev + 0.1));
-  };
-
-  const handleZoomOut = () => {
-    setScale(prev => Math.max(0.3, prev - 0.1));
-  };
-
-  const handleReset = () => {
-    setScale(1);
-    setPosition({ x: 0, y: 0 });
-  };
-
   const loadData = async () => {
     try {
       const [locationsData, employeesData] = await Promise.all([
@@ -414,19 +401,19 @@ export const OrganizationChart = () => {
       <Card>
         <CardContent className="p-4">
           {/* Zoom Controls */}
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
             <div className="text-sm text-secondary-600">
               Zoom: {Math.round(scale * 100)}%
             </div>
             <div className="flex gap-2">
-              <Button variant="secondary" size="sm" onClick={handleZoomIn}>
-                <ZoomIn className="w-4 h-4" />
-              </Button>
-              <Button variant="secondary" size="sm" onClick={handleZoomOut}>
+              <Button variant="secondary" size="sm" onClick={() => setScale(s => Math.max(0.5, s - 0.1))}>
                 <ZoomOut className="w-4 h-4" />
               </Button>
-              <Button variant="secondary" size="sm" onClick={handleReset}>
+              <Button variant="secondary" size="sm" onClick={() => setScale(1)}>
                 <Maximize2 className="w-4 h-4" />
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => setScale(s => Math.min(2, s + 0.1))}>
+                <ZoomIn className="w-4 h-4" />
               </Button>
             </div>
           </div>

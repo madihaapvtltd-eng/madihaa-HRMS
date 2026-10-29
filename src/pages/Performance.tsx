@@ -200,7 +200,7 @@ export const Performance = () => {
 
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <h2 className="text-lg font-semibold text-secondary-900">Review Summary</h2>
             <Button onClick={handleSubmitSampleReview} loading={actionLoading}>
               <Plus className="w-5 h-5 mr-2" />
@@ -209,7 +209,42 @@ export const Performance = () => {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
+          {/* Mobile Cards */}
+          <div className="sm:hidden space-y-4">
+            {reviews.length === 0 ? (
+              <div className="text-center py-12 text-sm text-secondary-500">No performance reviews available yet.</div>
+            ) : (
+              reviews.map((review) => (
+                <motion.div key={review.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-lg shadow p-4 border border-secondary-200">
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <div className="font-bold text-secondary-900 text-sm">{review.employeeId}</div>
+                      <div className="text-xs text-secondary-500">{review.period}</div>
+                    </div>
+                    <span className="text-xs uppercase tracking-wider text-secondary-700 capitalize">{review.status}</span>
+                  </div>
+                  <div className="space-y-2 text-sm mb-4">
+                    <div className="flex justify-between">
+                      <span className="text-secondary-600">Rating:</span>
+                      <span className="font-bold text-secondary-900">{review.overallRating}</span>
+                    </div>
+                  </div>
+                  <div className="flex justify-end">
+                    {review.status !== 'reviewed' ? (
+                      <Button size="sm" onClick={() => handleMarkReviewed(review.id)} loading={actionLoading}>
+                        Mark Reviewed
+                      </Button>
+                    ) : (
+                      <span className="text-xs uppercase tracking-wider text-green-600">Reviewed</span>
+                    )}
+                  </div>
+                </motion.div>
+              ))
+            )}
+          </div>
+
+          {/* Desktop Table */}
+          <div className="hidden sm:block overflow-x-auto">
             <table className="w-full text-left">
               <thead className="bg-secondary-50 border-b border-secondary-200">
                 <tr>

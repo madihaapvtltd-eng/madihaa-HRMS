@@ -16,6 +16,30 @@ import type { LeaveRequest, LeaveBalance, LeaveType } from '../types';
 const LEAVE_REQUESTS_COLLECTION = 'leave_requests';
 const LEAVE_BALANCES_COLLECTION = 'leave_balances';
 
+// Helper function to recursively remove undefined values
+const removeUndefined = (obj: any): any => {
+  if (obj === null || obj === undefined) return obj;
+  
+  if (Array.isArray(obj)) {
+    return obj.map(item => removeUndefined(item)).filter(item => item !== undefined && item !== null);
+  }
+  
+  if (typeof obj === 'object') {
+    const result: any = {};
+    for (const key in obj) {
+      if (obj.hasOwnProperty(key)) {
+        const value = removeUndefined(obj[key]);
+        if (value !== undefined && value !== null) {
+          result[key] = value;
+        }
+      }
+    }
+    return result;
+  }
+  
+  return obj;
+};
+
 // Leave Request functions
 export const getLeaveRequests = async (employeeId?: string) => {
   try {
@@ -38,14 +62,14 @@ export const getLeaveRequests = async (employeeId?: string) => {
       return {
         id: doc.id,
         ...data,
-        startDate: data.startDate?.toDate(),
-        endDate: data.endDate?.toDate(),
-        appliedDate: data.appliedDate?.toDate(),
-        amendedDate: data.amendedDate?.toDate(),
+        startDate: data.startDate?.toDate?.() || data.startDate,
+        endDate: data.endDate?.toDate?.() || data.endDate,
+        appliedDate: data.appliedDate?.toDate?.() || data.appliedDate,
+        amendedDate: data.amendedDate?.toDate?.() || data.amendedDate,
         approvals: data.approvals?.map((approval: any) => ({
           ...approval,
-          actionDate: approval.actionDate?.toDate()
-        }))
+          actionDate: approval.actionDate?.toDate?.() || approval.actionDate
+        })).filter((a: any) => a !== undefined) || []
       } as LeaveRequest;
     });
     
@@ -68,17 +92,19 @@ export const getLeaveRequestById = async (id: string) => {
     
     if (docSnap.exists()) {
       const data = docSnap.data();
+      const approvals = data.approvals?.map((approval: any) => ({
+        ...approval,
+        actionDate: approval.actionDate?.toDate?.() || approval.actionDate
+      })).filter((a: any) => a !== undefined) || [];
+      
       return {
         id: docSnap.id,
         ...data,
-        startDate: data.startDate.toDate(),
-        endDate: data.endDate.toDate(),
-        appliedDate: data.appliedDate.toDate(),
-        amendedDate: data.amendedDate?.toDate(),
-        approvals: data.approvals?.map((approval: any) => ({
-          ...approval,
-          actionDate: approval.actionDate?.toDate()
-        }))
+        startDate: data.startDate?.toDate?.() || data.startDate,
+        endDate: data.endDate?.toDate?.() || data.endDate,
+        appliedDate: data.appliedDate?.toDate?.() || data.appliedDate,
+        amendedDate: data.amendedDate?.toDate?.() || data.amendedDate,
+        approvals
       } as LeaveRequest;
     }
     return null;
@@ -162,7 +188,20 @@ export const updateLeaveRequest = async (id: string, data: Partial<LeaveRequest>
       updateData.amendedDate = Timestamp.fromDate(updateData.amendedDate);
     }
     
-    await updateDoc(doc(db, LEAVE_REQUESTS_COLLECTION, id), updateData);
+    // Handle approvals array - convert Date objects to Timestamps
+    if (updateData.approvals && Array.isArray(updateData.approvals)) {
+      updateData.approvals = updateData.approvals.map((approval: any) => ({
+        ...approval,
+        actionDate: approval.actionDate instanceof Date 
+          ? Timestamp.fromDate(approval.actionDate) 
+          : approval.actionDate
+      }));
+    }
+    
+    // Recursively remove all undefined and null values
+    const cleanedData = removeUndefined(updateData);
+    
+    await updateDoc(doc(db, LEAVE_REQUESTS_COLLECTION, id), cleanedData);
   } catch (error) {
     console.error('Error updating leave request:', error);
     throw error;
@@ -199,25 +238,25 @@ export const approveLeaveRequest = async (id: string, approverId: string, approv
     const request = await getLeaveRequestById(id);
     if (!request) throw new Error('Leave request not found');
     
-    const updatedApprovals = request.approvals || [];
-    updatedApprovals[level] = {
+    // Create a clean approvals array with only the new approval
+    const newApproval = {
       level,
       approverId,
       approverName,
-      status: 'approved',
+      status: 'approved' as const,
       comments,
       actionDate: new Date(),
     };
     
-    const allApproved = updatedApprovals.every(a => a.status === 'approved');
-    const status = allApproved ? 'approved' : 'pending';
+    // Set status to approved directly since we're using single-level approval
+    const status = 'approved';
     
     await updateLeaveRequest(id, {
-      approvals: updatedApprovals,
+      approvals: [newApproval],
       status,
     });
 
-    if (allApproved && !request.balanceAdjusted) {
+    if (!request.balanceAdjusted) {
       await adjustLeaveBalance(request.employeeId, request.type, request.days, request.startDate.getFullYear());
       await updateLeaveRequest(id, { balanceAdjusted: true });
     }
@@ -232,18 +271,18 @@ export const rejectLeaveRequest = async (id: string, approverId: string, approve
     const request = await getLeaveRequestById(id);
     if (!request) throw new Error('Leave request not found');
     
-    const updatedApprovals = request.approvals || [];
-    updatedApprovals[level] = {
+    // Create a clean approvals array with only the new rejection
+    const newApproval = {
       level,
       approverId,
       approverName,
-      status: 'rejected',
+      status: 'rejected' as const,
       comments,
       actionDate: new Date(),
     };
     
     await updateLeaveRequest(id, {
-      approvals: updatedApprovals,
+      approvals: [newApproval],
       status: 'rejected',
     });
   } catch (error) {

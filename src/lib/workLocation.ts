@@ -36,6 +36,9 @@ const firestoreToWorkLocation = (doc: any): WorkLocation => {
     description: data.description,
     address: data.address,
     assignedStaff: data.assignedStaff || [],
+    lateThresholdSundayToThursday: data.lateThresholdSundayToThursday,
+    lateThresholdFriday: data.lateThresholdFriday,
+    lateThresholdSaturday: data.lateThresholdSaturday,
     createdAt: timestampToDate(data.createdAt),
     updatedAt: timestampToDate(data.updatedAt),
   };

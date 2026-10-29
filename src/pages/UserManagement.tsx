@@ -187,71 +187,127 @@ export const UserManagement: React.FC = () => {
             <p className="mt-2 text-gray-600">Loading users...</p>
           </div>
         ) : (
-          <Card>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="text-left py-3 px-4 font-semibold text-gray-700">User</th>
-                    <th className="text-left py-3 px-4 font-semibold text-gray-700">Email</th>
-                    <th className="text-left py-3 px-4 font-semibold text-gray-700">Role</th>
-                    <th className="text-left py-3 px-4 font-semibold text-gray-700">Department</th>
-                    <th className="text-left py-3 px-4 font-semibold text-gray-700">Employee ID</th>
-                    <th className="text-left py-3 px-4 font-semibold text-gray-700">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredUsers.map((user) => (
-                    <tr key={user.id} className="border-b border-gray-100 hover:bg-gray-50">
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
-                            <span className="text-primary-600 font-semibold">
-                              {(user.displayName || '?').charAt(0).toUpperCase()}
-                            </span>
-                          </div>
-                          <span className="font-medium text-gray-900">{user.displayName || 'Unknown'}</span>
+          <>
+            {/* Mobile Cards */}
+            <div className="sm:hidden space-y-4">
+              {filteredUsers.map((user) => (
+                <Card key={user.id}>
+                  <div className="p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
+                          <span className="text-primary-600 font-semibold">
+                            {(user.displayName || '?').charAt(0).toUpperCase()}
+                          </span>
                         </div>
-                      </td>
-                      <td className="py-3 px-4 text-gray-600">{user.email}</td>
-                      <td className="py-3 px-4">
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${roleColors[user.role]}`}>
-                          {user.role.replace('_', ' ').toUpperCase()}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-gray-600">{user.department || '-'}</td>
-                      <td className="py-3 px-4 text-gray-600">{user.employeeId || '-'}</td>
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => openEditModal(user)}
-                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
-                            title="Edit user"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteUser(user.id)}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
-                            title="Delete user"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-
-              {filteredUsers.length === 0 && (
-                <div className="text-center py-12 text-gray-500">
-                  <Users className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-                  <p>No users found</p>
-                </div>
-              )}
+                        <span className="font-medium text-gray-900">{user.displayName || 'Unknown'}</span>
+                      </div>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${roleColors[user.role]}`}>
+                        {user.role.replace('_', ' ').toUpperCase()}
+                      </span>
+                    </div>
+                    <div className="space-y-2 text-sm mb-4">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Email:</span>
+                        <span className="font-medium text-gray-900">{user.email}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Department:</span>
+                        <span className="font-medium">{user.department || '-'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Employee ID:</span>
+                        <span className="font-medium">{user.employeeId || '-'}</span>
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <button
+                        onClick={() => openEditModal(user)}
+                        className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm flex items-center gap-1"
+                      >
+                        <Edit className="w-4 h-4" />
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDeleteUser(user.id)}
+                        className="px-3 py-2 bg-red-600 text-white rounded-lg text-sm flex items-center gap-1"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                </Card>
+              ))}
             </div>
-          </Card>
+
+            {/* Desktop Table */}
+            <Card>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700">User</th>
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Email</th>
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Role</th>
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Department</th>
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Employee ID</th>
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredUsers.map((user) => (
+                      <tr key={user.id} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
+                              <span className="text-primary-600 font-semibold">
+                                {(user.displayName || '?').charAt(0).toUpperCase()}
+                              </span>
+                            </div>
+                            <span className="font-medium text-gray-900">{user.displayName || 'Unknown'}</span>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 text-gray-600">{user.email}</td>
+                        <td className="py-3 px-4">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${roleColors[user.role]}`}>
+                            {user.role.replace('_', ' ').toUpperCase()}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-gray-600">{user.department || '-'}</td>
+                        <td className="py-3 px-4 text-gray-600">{user.employeeId || '-'}</td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => openEditModal(user)}
+                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
+                              title="Edit user"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteUser(user.id)}
+                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+                              title="Delete user"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                {filteredUsers.length === 0 && (
+                  <div className="text-center py-12 text-gray-500">
+                    <Users className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                    <p>No users found</p>
+                  </div>
+                )}
+              </div>
+            </Card>
+          </>
         )}
 
         {/* Modal */}

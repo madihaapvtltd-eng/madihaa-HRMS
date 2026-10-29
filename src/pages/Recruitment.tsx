@@ -333,7 +333,55 @@ export const Recruitment = () => {
           <h2 className="text-lg font-semibold text-secondary-900">Requisition Pipeline</h2>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
+          {/* Mobile Cards */}
+          <div className="sm:hidden space-y-4">
+            {requisitions.map((req, index) => (
+              <motion.div
+                key={req.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.03 }}
+                className="bg-white rounded-lg shadow p-4 border border-secondary-200"
+              >
+                <div className="flex justify-between items-start mb-3">
+                  <div>
+                    <div className="font-bold text-secondary-900 text-sm">{req.title}</div>
+                    <div className="text-xs text-secondary-500">{req.requisitionNumber || req.id}</div>
+                  </div>
+                  <span className="text-xs uppercase tracking-wider font-medium text-secondary-900">{req.status}</span>
+                </div>
+                <div className="space-y-2 text-sm mb-4">
+                  <div className="flex justify-between">
+                    <span className="text-secondary-600">Department:</span>
+                    <span className="font-medium">{req.department}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-secondary-600">Grade:</span>
+                    <span className="font-medium">{req.grade}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-secondary-600">Created:</span>
+                    <span className="font-medium">{new Date(req.createdAt).toLocaleDateString()}</span>
+                  </div>
+                </div>
+                <div className="flex justify-end">
+                  {req.status === 'draft' && (
+                    <Button variant="secondary" size="sm" onClick={() => handleSubmitRequisition(req.id)} disabled={actionLoading}>
+                      Submit
+                    </Button>
+                  )}
+                  {req.status === 'submitted' && (
+                    <Button variant="primary" size="sm" onClick={() => handleApproveRequisition(req.id)} disabled={actionLoading}>
+                      Approve
+                    </Button>
+                  )}
+                </div>
+              </motion.div>
+            ))}
+          </div>
+
+          {/* Desktop Table */}
+          <div className="hidden sm:block overflow-x-auto">
             <table className="w-full text-left">
               <thead className="bg-secondary-50 border-b border-secondary-200">
                 <tr>
@@ -390,7 +438,42 @@ export const Recruitment = () => {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
+            {/* Mobile Cards */}
+            <div className="sm:hidden space-y-4">
+              {vacancies.length === 0 ? (
+                <div className="text-center py-12 text-sm text-secondary-500">No vacancies configured yet.</div>
+              ) : (
+                vacancies.map((vacancy) => (
+                  <motion.div
+                    key={vacancy.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-white rounded-lg shadow p-4 border border-secondary-200"
+                  >
+                    <div className="flex justify-between items-start mb-3">
+                      <div className="font-bold text-secondary-900 text-sm">{vacancy.title}</div>
+                      <span className="text-xs uppercase tracking-wider font-medium text-secondary-900">{vacancy.status}</span>
+                    </div>
+                    <div className="space-y-2 text-sm mb-4">
+                      <div className="flex justify-between">
+                        <span className="text-secondary-600">Location:</span>
+                        <span className="font-medium">{vacancy.location}</span>
+                      </div>
+                    </div>
+                    <div className="flex justify-end">
+                      {vacancy.status === 'draft' && (
+                        <Button variant="secondary" size="sm" onClick={() => handlePublishVacancy(vacancy.id)} disabled={actionLoading}>
+                          Publish
+                        </Button>
+                      )}
+                    </div>
+                  </motion.div>
+                ))
+              )}
+            </div>
+
+            {/* Desktop Table */}
+            <div className="hidden sm:block overflow-x-auto">
               <table className="w-full text-left">
                 <thead className="bg-secondary-50 border-b border-secondary-200">
                   <tr>

@@ -233,7 +233,34 @@ export const Training = () => {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
+            {/* Mobile Cards */}
+            <div className="sm:hidden space-y-4">
+              {sessions.length === 0 ? (
+                <div className="text-center py-12 text-sm text-secondary-500">No sessions scheduled yet.</div>
+              ) : (
+                sessions.map((session) => (
+                  <motion.div key={session.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-lg shadow p-4 border border-secondary-200">
+                    <div className="flex justify-between items-start mb-3">
+                      <div className="font-bold text-secondary-900 text-sm">{session.courseTitle || session.id}</div>
+                      <span className="text-xs uppercase tracking-wider font-medium text-secondary-900">{session.status}</span>
+                    </div>
+                    <div className="space-y-2 text-sm mb-4">
+                      <div className="flex justify-between">
+                        <span className="text-secondary-600">Date:</span>
+                        <span className="font-medium">{session.sessionDate ? new Date(session.sessionDate).toLocaleDateString() : 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-secondary-600">Location:</span>
+                        <span className="font-medium">{session.location || 'N/A'}</span>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))
+              )}
+            </div>
+
+            {/* Desktop Table */}
+            <div className="hidden sm:block overflow-x-auto">
               <table className="w-full text-left">
                 <thead className="bg-secondary-50 border-b border-secondary-200">
                   <tr>

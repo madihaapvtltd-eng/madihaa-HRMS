@@ -207,10 +207,10 @@ export const Employees = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 border-b border-secondary-200">
+      <div className="flex gap-2 border-b border-secondary-200 overflow-x-auto pb-2 sm:pb-0">
         <button
           onClick={() => setActiveTab('current')}
-          className={`px-4 py-2 font-medium transition-colors ${
+          className={`px-4 py-2 font-medium transition-colors whitespace-nowrap ${
             activeTab === 'current'
               ? 'text-primary-600 border-b-2 border-primary-600'
               : 'text-secondary-600 hover:text-secondary-900'
@@ -220,7 +220,7 @@ export const Employees = () => {
         </button>
         <button
           onClick={() => setActiveTab('on_leave')}
-          className={`px-4 py-2 font-medium transition-colors ${
+          className={`px-4 py-2 font-medium transition-colors whitespace-nowrap ${
             activeTab === 'on_leave'
               ? 'text-primary-600 border-b-2 border-primary-600'
               : 'text-secondary-600 hover:text-secondary-900'
@@ -230,7 +230,7 @@ export const Employees = () => {
         </button>
         <button
           onClick={() => setActiveTab('no_status')}
-          className={`px-4 py-2 font-medium transition-colors ${
+          className={`px-4 py-2 font-medium transition-colors whitespace-nowrap ${
             activeTab === 'no_status'
               ? 'text-primary-600 border-b-2 border-primary-600'
               : 'text-secondary-600 hover:text-secondary-900'
@@ -240,7 +240,7 @@ export const Employees = () => {
         </button>
         <button
           onClick={() => setActiveTab('past')}
-          className={`px-4 py-2 font-medium transition-colors ${
+          className={`px-4 py-2 font-medium transition-colors whitespace-nowrap ${
             activeTab === 'past'
               ? 'text-primary-600 border-b-2 border-primary-600'
               : 'text-secondary-600 hover:text-secondary-900'

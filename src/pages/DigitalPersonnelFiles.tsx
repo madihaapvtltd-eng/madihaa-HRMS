@@ -168,12 +168,12 @@ export const DigitalPersonnelFiles = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 border-b border-secondary-200">
+      <div className="flex gap-2 border-b border-secondary-200 overflow-x-auto pb-2 sm:pb-0">
         {(['overview', 'expiring', 'expired', 'alerts'] as const).map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 font-medium border-b-2 transition ${
+            className={`px-4 py-2 font-medium border-b-2 transition whitespace-nowrap ${
               activeTab === tab
                 ? 'border-primary-600 text-primary-600'
                 : 'border-transparent text-secondary-600 hover:text-secondary-900'

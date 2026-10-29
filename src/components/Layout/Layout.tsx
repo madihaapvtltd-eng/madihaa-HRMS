@@ -49,7 +49,91 @@ export const Layout: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* Sidebar */}
+      {/* Mobile sidebar */}
+      <AnimatePresence>
+        {sidebarOpen && (
+          <motion.aside
+            initial={{ x: '-100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '-100%' }}
+            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            className="fixed inset-y-0 left-0 w-80 bg-white shadow-xl z-50 lg:hidden"
+          >
+            <div className="flex flex-col h-full">
+              {/* Logo */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-secondary-200">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-primary-600 rounded-lg flex items-center justify-center">
+                    <span className="text-white font-bold text-xl">M</span>
+                  </div>
+                  <div>
+                    <h1 className="text-lg font-bold text-secondary-900">Madihaa HRMS</h1>
+                    <p className="text-xs text-secondary-600">Human Resource Management</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSidebarOpen(false)}
+                  className="text-secondary-600 hover:text-secondary-900"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              {/* User info */}
+              <div className="px-6 py-4 border-b border-secondary-200">
+                <div className="flex items-center space-x-3">
+                  <div className="w-12 h-12 bg-primary-100 rounded-full flex items-center justify-center">
+                    <User className="w-6 h-6 text-primary-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-secondary-900 truncate">
+                      {user?.displayName || user?.email}
+                    </p>
+                    <p className="text-xs text-secondary-600 capitalize">
+                      {user?.role?.replace('_', ' ')}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Navigation */}
+              <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto">
+                {navigation.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <a
+                      key={item.name}
+                      href={item.href}
+                      onClick={() => setSidebarOpen(false)}
+                      className="flex items-center space-x-3 px-4 py-3 text-sm font-medium rounded-lg text-secondary-700 hover:bg-primary-50 hover:text-primary-700 transition-colors"
+                    >
+                      <Icon className="w-5 h-5" />
+                      <span>{item.name}</span>
+                    </a>
+                  );
+                })}
+              </nav>
+
+              {/* Logout */}
+              <div className="px-4 py-4 border-t border-secondary-200">
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    signOut();
+                    setSidebarOpen(false);
+                  }}
+                  className="w-full justify-start"
+                >
+                  <LogOut className="w-5 h-5 mr-3" />
+                  Sign Out
+                </Button>
+              </div>
+            </div>
+          </motion.aside>
+        )}
+      </AnimatePresence>
+
+      {/* Desktop Sidebar */}
       <aside
         className="hidden lg:block lg:fixed lg:inset-y-0 lg:left-0 lg:w-80 lg:bg-white lg:shadow-xl"
       >

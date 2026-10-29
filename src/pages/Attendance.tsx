@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Calendar, Clock, RefreshCw, Download, ArrowRight, ArrowLeft, Upload, MapPin } from 'lucide-react';
+import { Calendar, Clock, RefreshCw, Download, ArrowRight, ArrowLeft, Upload, MapPin, Edit2, Save, X } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Card, CardHeader, CardContent } from '../components/ui/Card';
 import { getAttendanceStats, getTodayAttendanceForEmployee, checkIn, checkOut, requestAttendanceAdjustment } from '../lib/attendance';
 import { useAuth } from '../contexts/AuthContext';
 import { getEmployees } from '../lib/employees';
 import { getAllWorkLocations } from '../lib/workLocation';
+import { addDoc, collection, query, where, getDocs, updateDoc, doc, Timestamp } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 import * as XLSX from 'xlsx';
 
 export const Attendance = () => {
@@ -32,6 +34,10 @@ export const Attendance = () => {
   const [employees, setEmployees] = useState<any[]>([]);
   const [workLocations, setWorkLocations] = useState<any[]>([]);
   const [missingStaff, setMissingStaff] = useState<any[]>([]);
+  const [editingRow, setEditingRow] = useState<string | null>(null);
+  const [editedFirstPunch, setEditedFirstPunch] = useState('');
+  const [editedLastPunch, setEditedLastPunch] = useState('');
+  const [saving, setSaving] = useState(false);
 
   const loadTodayStats = useCallback(async () => {
     try {
@@ -210,19 +216,9 @@ export const Attendance = () => {
       }
     });
     
-    // Check if first punch is after 8:30 AM and match with work location
+    // Check if first punch is late based on department and day of week, and match with work location
     employeeMap.forEach((empData) => {
-      if (empData.firstPunch) {
-        const firstPunchDate = new Date(empData.firstPunch);
-        const hours = firstPunchDate.getHours();
-        const minutes = firstPunchDate.getMinutes();
-        // Check if time is after 8:30 AM
-        if (hours > 8 || (hours === 8 && minutes > 30)) {
-          empData.isLate = true;
-        }
-      }
-      
-      // Match employee with work location
+      // Match employee with work location first
       const employee = employees.find(emp => 
         emp.employeeId === empData.empId || 
         emp.fullName?.toLowerCase() === empData.name?.toLowerCase()
@@ -237,6 +233,48 @@ export const Attendance = () => {
         empData.workLocation = location?.name || 'Unassigned';
         empData.workLocationId = location?.id;
         empData.employeeId = employee.id;
+        
+        // Check if first punch is late based on work location rules
+        if (empData.firstPunch && empData.workLocationId) {
+          const firstPunchDate = new Date(empData.firstPunch);
+          const hours = firstPunchDate.getHours();
+          const minutes = firstPunchDate.getMinutes();
+          const dayOfWeek = firstPunchDate.getDay(); // 0 = Sunday, 6 = Saturday
+          
+          // Get work location for this employee
+          const location = workLocations.find(loc => loc.id === empData.workLocationId);
+          
+          // Define late threshold based on work location rules
+          let lateHour = 8;
+          let lateMinute = 30; // Default: 8:30 AM
+
+          if (location) {
+            let threshold;
+            if (dayOfWeek >= 0 && dayOfWeek <= 4) {
+              // Sunday to Thursday
+              threshold = location.lateThresholdSundayToThursday;
+            } else if (dayOfWeek === 5) {
+              // Friday
+              threshold = location.lateThresholdFriday;
+            } else {
+              // Saturday
+              threshold = location.lateThresholdSaturday;
+            }
+            
+            if (threshold) {
+              const [thresholdHour, thresholdMinute] = threshold.split(':').map(Number);
+              if (!isNaN(thresholdHour) && !isNaN(thresholdMinute)) {
+                lateHour = thresholdHour;
+                lateMinute = thresholdMinute;
+              }
+            }
+          }
+
+          // Check if time is after the late threshold
+          if (hours > lateHour || (hours === lateHour && minutes > lateMinute)) {
+            empData.isLate = true;
+          }
+        }
       } else {
         empData.workLocation = 'Not Found';
         empData.workLocationId = null;
@@ -287,6 +325,89 @@ export const Attendance = () => {
     const minutes = parseInt(timeParts[1]);
     
     return new Date(year, month, day, hours, minutes);
+  };
+
+  const handleEditRow = (empId: string, firstPunch: Date | null, lastPunch: Date | null) => {
+    setEditingRow(empId);
+    setEditedFirstPunch(firstPunch ? new Date(firstPunch).toLocaleString('en-GB', { hour12: false }) : '');
+    setEditedLastPunch(lastPunch ? new Date(lastPunch).toLocaleString('en-GB', { hour12: false }) : '');
+  };
+
+  const handleCancelEdit = () => {
+    setEditingRow(null);
+    setEditedFirstPunch('');
+    setEditedLastPunch('');
+  };
+
+  const handleSaveRow = async (emp: any) => {
+    if (!emp.employeeId) {
+      alert('Employee ID not found');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      
+      // Parse the edited dates
+      const firstPunchDate = editedFirstPunch ? new Date(editedFirstPunch) : emp.firstPunch;
+      const lastPunchDate = editedLastPunch ? new Date(editedLastPunch) : emp.lastPunch;
+
+      // Check if attendance record exists for this employee on this date
+      const attendanceDate = emp.firstPunch ? new Date(emp.firstPunch) : new Date();
+      const startOfDay = new Date(attendanceDate);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(attendanceDate);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      const q = query(
+        collection(db, 'attendance'),
+        where('employeeId', '==', emp.employeeId),
+        where('date', '>=', Timestamp.fromDate(startOfDay)),
+        where('date', '<=', Timestamp.fromDate(endOfDay))
+      );
+
+      const querySnapshot = await getDocs(q);
+      
+      if (querySnapshot.empty) {
+        // Create new attendance record
+        await addDoc(collection(db, 'attendance'), {
+          employeeId: emp.employeeId,
+          date: Timestamp.fromDate(attendanceDate),
+          checkInTime: firstPunchDate ? Timestamp.fromDate(firstPunchDate) : null,
+          checkOutTime: lastPunchDate ? Timestamp.fromDate(lastPunchDate) : null,
+          checkInMethod: 'web',
+          status: 'present',
+          lateArrival: emp.isLate || false,
+        });
+      } else {
+        // Update existing attendance record
+        const docId = querySnapshot.docs[0].id;
+        await updateDoc(doc(db, 'attendance', docId), {
+          checkInTime: firstPunchDate ? Timestamp.fromDate(firstPunchDate) : null,
+          checkOutTime: lastPunchDate ? Timestamp.fromDate(lastPunchDate) : null,
+          lateArrival: emp.isLate || false,
+        });
+      }
+
+      // Update local state
+      setAttendanceData(prevData =>
+        prevData.map(item =>
+          item.empId === emp.empId
+            ? { ...item, firstPunch: firstPunchDate, lastPunch: lastPunchDate }
+            : item
+        )
+      );
+
+      setEditingRow(null);
+      setEditedFirstPunch('');
+      setEditedLastPunch('');
+      alert('Attendance saved successfully');
+    } catch (error) {
+      console.error('Error saving attendance:', error);
+      alert('Failed to save attendance');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -529,11 +650,38 @@ export const Attendance = () => {
                   <div className="bg-red-100 px-4 py-3 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Clock className="w-5 h-5 text-red-600" />
-                      <h3 className="font-semibold text-red-900">Missing Staff - Didn't Punch Today</h3>
+                      <h3 className="font-semibold text-red-900">Missing Staff</h3>
                     </div>
                     <span className="text-sm text-red-700 font-medium">{missingStaff.length} employees</span>
                   </div>
-                  <div className="overflow-x-auto">
+                  
+                  {/* Mobile Cards - Missing Staff */}
+                  <div className="sm:hidden space-y-3 p-4">
+                    {missingStaff.map((emp: any, index: number) => (
+                      <div key={index} className="bg-white rounded-lg shadow p-4 border border-red-200">
+                        <div className="flex justify-between items-start mb-3">
+                          <div>
+                            <div className="font-bold text-red-900 text-sm">{emp.name}</div>
+                            <div className="text-xs text-red-700">{emp.empId}</div>
+                          </div>
+                          <span className="bg-red-200 text-red-800 px-2 py-1 rounded text-xs font-semibold">No Punch</span>
+                        </div>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-red-600">Department:</span>
+                            <span className="font-medium">{emp.department}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-red-600">Location:</span>
+                            <span className="font-medium">{emp.workLocation}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Desktop Table - Missing Staff */}
+                  <div className="hidden sm:block overflow-x-auto">
                     <table className="w-full">
                       <thead>
                         <tr className="border-b border-red-200 bg-red-50">
@@ -582,7 +730,97 @@ export const Attendance = () => {
                       </div>
                       <span className="text-sm text-primary-700 font-medium">{(emps as any[]).length} employees</span>
                     </div>
-                    <div className="overflow-x-auto">
+                    
+                    {/* Mobile Cards - Work Location */}
+                    <div className="sm:hidden space-y-3 p-4">
+                      {(emps as any[]).map((emp: any, index: number) => (
+                        <div key={index} className={`bg-white rounded-lg shadow p-4 border ${emp.isLate ? 'border-red-300 bg-red-50' : 'border-secondary-200'}`}>
+                          <div className="flex justify-between items-start mb-3">
+                            <div>
+                              <div className="font-bold text-secondary-900 text-sm">{emp.name}</div>
+                              <div className="text-xs text-secondary-500">{emp.empId}</div>
+                            </div>
+                            {emp.isLate && (
+                              <span className="bg-red-100 text-red-700 px-2 py-1 rounded text-xs font-semibold">Late</span>
+                            )}
+                          </div>
+                          <div className="space-y-2 text-sm mb-4">
+                            <div className="flex justify-between">
+                              <span className="text-secondary-600">Department:</span>
+                              <span className="font-medium">{emp.department}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-secondary-600">First Punch:</span>
+                              <span className={`font-medium ${emp.isLate ? 'text-red-600' : ''}`}>
+                                {editingRow === emp.empId ? (
+                                  <input
+                                    type="text"
+                                    value={editedFirstPunch}
+                                    onChange={(e) => setEditedFirstPunch(e.target.value)}
+                                    className="w-full px-2 py-1 border border-secondary-300 rounded focus:outline-none focus:ring-2 focus:ring-primary-500 text-xs"
+                                    placeholder="DD/MM/YYYY HH:mm"
+                                  />
+                                ) : (
+                                  emp.firstPunch ? new Date(emp.firstPunch).toLocaleString() : 'N/A'
+                                )}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-secondary-600">Last Punch:</span>
+                              <span className="font-medium">
+                                {editingRow === emp.empId ? (
+                                  <input
+                                    type="text"
+                                    value={editedLastPunch}
+                                    onChange={(e) => setEditedLastPunch(e.target.value)}
+                                    className="w-full px-2 py-1 border border-secondary-300 rounded focus:outline-none focus:ring-2 focus:ring-primary-500 text-xs"
+                                    placeholder="DD/MM/YYYY HH:mm"
+                                  />
+                                ) : (
+                                  emp.lastPunch ? new Date(emp.lastPunch).toLocaleString() : 'N/A'
+                                )}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-secondary-600">Total Punches:</span>
+                              <span className="font-medium">{emp.totalPunches || 0}</span>
+                            </div>
+                          </div>
+                          <div className="flex justify-end space-x-2">
+                            {editingRow === emp.empId ? (
+                              <>
+                                <button
+                                  onClick={() => handleSaveRow(emp.empId)}
+                                  disabled={saving}
+                                  className="px-3 py-2 bg-green-600 text-white rounded-lg text-sm flex items-center gap-1"
+                                >
+                                  <Save className="w-4 h-4" />
+                                  Save
+                                </button>
+                                <button
+                                  onClick={handleCancelEdit}
+                                  className="px-3 py-2 bg-secondary-600 text-white rounded-lg text-sm flex items-center gap-1"
+                                >
+                                  <X className="w-4 h-4" />
+                                  Cancel
+                                </button>
+                              </>
+                            ) : (
+                              <button
+                                onClick={() => handleEditRow(emp.empId, emp.firstPunch, emp.lastPunch)}
+                                className="px-3 py-2 bg-primary-600 text-white rounded-lg text-sm flex items-center gap-1"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                                Edit
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Desktop Table - Work Location */}
+                    <div className="hidden sm:block overflow-x-auto">
                       <table className="w-full">
                         <thead>
                           <tr className="border-b border-secondary-200 bg-secondary-50">
@@ -592,6 +830,7 @@ export const Attendance = () => {
                             <th className="text-left py-3 px-4 text-sm font-medium text-secondary-700">First Punch</th>
                             <th className="text-left py-3 px-4 text-sm font-medium text-secondary-700">Last Punch</th>
                             <th className="text-left py-3 px-4 text-sm font-medium text-secondary-700">Total Punches</th>
+                            <th className="text-left py-3 px-4 text-sm font-medium text-secondary-700">Actions</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -604,13 +843,64 @@ export const Attendance = () => {
                               <td className="py-3 px-4 text-sm text-secondary-900">{emp.name}</td>
                               <td className="py-3 px-4 text-sm text-secondary-900">{emp.department}</td>
                               <td className={`py-3 px-4 text-sm ${emp.isLate ? 'text-red-600 font-semibold' : 'text-secondary-900'}`}>
-                                {emp.firstPunch ? new Date(emp.firstPunch).toLocaleString() : 'N/A'}
-                                {emp.isLate && <span className="ml-2 text-xs bg-red-100 text-red-700 px-2 py-1 rounded">Late</span>}
+                                {editingRow === emp.empId ? (
+                                  <input
+                                    type="text"
+                                    value={editedFirstPunch}
+                                    onChange={(e) => setEditedFirstPunch(e.target.value)}
+                                    className="w-full px-2 py-1 border border-secondary-300 rounded focus:outline-none focus:ring-2 focus:ring-primary-500"
+                                    placeholder="DD/MM/YYYY HH:mm"
+                                  />
+                                ) : (
+                                  <>
+                                    {emp.firstPunch ? new Date(emp.firstPunch).toLocaleString() : 'N/A'}
+                                    {emp.isLate && <span className="ml-2 text-xs bg-red-100 text-red-700 px-2 py-1 rounded">Late</span>}
+                                  </>
+                                )}
                               </td>
                               <td className="py-3 px-4 text-sm text-secondary-900">
-                                {emp.lastPunch ? new Date(emp.lastPunch).toLocaleString() : 'N/A'}
+                                {editingRow === emp.empId ? (
+                                  <input
+                                    type="text"
+                                    value={editedLastPunch}
+                                    onChange={(e) => setEditedLastPunch(e.target.value)}
+                                    className="w-full px-2 py-1 border border-secondary-300 rounded focus:outline-none focus:ring-2 focus:ring-primary-500"
+                                    placeholder="DD/MM/YYYY HH:mm"
+                                  />
+                                ) : (
+                                  emp.lastPunch ? new Date(emp.lastPunch).toLocaleString() : 'N/A'
+                                )}
                               </td>
                               <td className="py-3 px-4 text-sm text-secondary-900">{emp.totalPunches}</td>
+                              <td className="py-3 px-4 text-sm">
+                                {editingRow === emp.empId ? (
+                                  <div className="flex gap-2">
+                                    <Button
+                                      variant="secondary"
+                                      size="sm"
+                                      onClick={() => handleSaveRow(emp)}
+                                      loading={saving}
+                                    >
+                                      <Save className="w-4 h-4" />
+                                    </Button>
+                                    <Button
+                                      variant="secondary"
+                                      size="sm"
+                                      onClick={handleCancelEdit}
+                                    >
+                                      <X className="w-4 h-4" />
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={() => handleEditRow(emp.empId, emp.firstPunch, emp.lastPunch)}
+                                  >
+                                    <Edit2 className="w-4 h-4" />
+                                  </Button>
+                                )}
+                              </td>
                             </tr>
                           ))}
                         </tbody>

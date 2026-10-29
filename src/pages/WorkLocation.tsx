@@ -37,6 +37,9 @@ export const WorkLocationPage = () => {
     name: '',
     description: '',
     address: '',
+    lateThresholdSundayToThursday: '08:30',
+    lateThresholdFriday: '08:30',
+    lateThresholdSaturday: '08:30',
     assignedStaff: [] as string[]
   });
 
@@ -95,7 +98,7 @@ export const WorkLocationPage = () => {
       }
       setShowModal(false);
       setEditingLocation(null);
-      setFormData({ name: '', description: '', address: '', assignedStaff: [] });
+      setFormData({ name: '', description: '', address: '', lateThresholdSundayToThursday: '08:30', lateThresholdFriday: '08:30', lateThresholdSaturday: '08:30', assignedStaff: [] });
       loadData();
     } catch (error) {
       console.error('Error saving work location:', error);
@@ -109,6 +112,9 @@ export const WorkLocationPage = () => {
       name: location.name,
       description: location.description || '',
       address: location.address || '',
+      lateThresholdSundayToThursday: location.lateThresholdSundayToThursday || '08:30',
+      lateThresholdFriday: location.lateThresholdFriday || '08:30',
+      lateThresholdSaturday: location.lateThresholdSaturday || '08:30',
       assignedStaff: location.assignedStaff || []
     });
     setShowModal(true);
@@ -268,7 +274,7 @@ export const WorkLocationPage = () => {
           <p className="text-secondary-600 mt-1">Manage work locations and staff assignments</p>
         </div>
         <div className="flex gap-2">
-          <Button onClick={() => { setEditingLocation(null); setFormData({ name: '', description: '', address: '', assignedStaff: [] }); setShowModal(true); }}>
+          <Button onClick={() => { setEditingLocation(null); setFormData({ name: '', description: '', address: '', lateThresholdSundayToThursday: '08:30', lateThresholdFriday: '08:30', lateThresholdSaturday: '08:30', assignedStaff: [] }); setShowModal(true); }}>
             <Plus className="w-5 h-5 mr-2" />
             Add Work Location
           </Button>
@@ -435,6 +441,50 @@ export const WorkLocationPage = () => {
                     className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                     placeholder="Enter address"
                   />
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-secondary-700 mb-1">
+                      Late Threshold (Sun-Thu)
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.lateThresholdSundayToThursday}
+                      onChange={(e) => setFormData({ ...formData, lateThresholdSundayToThursday: e.target.value })}
+                      pattern="[0-9]{2}:[0-9]{2}"
+                      placeholder="HH:mm"
+                      className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                    <p className="text-xs text-secondary-500 mt-1">Enter 24-hour format (e.g., 09:00, 13:00)</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-secondary-700 mb-1">
+                      Late Threshold (Friday)
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.lateThresholdFriday}
+                      onChange={(e) => setFormData({ ...formData, lateThresholdFriday: e.target.value })}
+                      pattern="[0-9]{2}:[0-9]{2}"
+                      placeholder="HH:mm"
+                      className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                    <p className="text-xs text-secondary-500 mt-1">Enter 24-hour format (e.g., 09:00, 13:00)</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-secondary-700 mb-1">
+                      Late Threshold (Saturday)
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.lateThresholdSaturday}
+                      onChange={(e) => setFormData({ ...formData, lateThresholdSaturday: e.target.value })}
+                      pattern="[0-9]{2}:[0-9]{2}"
+                      placeholder="HH:mm"
+                      className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                    <p className="text-xs text-secondary-500 mt-1">Enter 24-hour format (e.g., 09:00, 13:00)</p>
+                  </div>
                 </div>
                 <div className="flex gap-3 pt-4">
                   <Button

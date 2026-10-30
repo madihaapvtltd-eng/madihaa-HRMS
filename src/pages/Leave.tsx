@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Calendar, Plus, Filter, Download, X, Eye, Check, X as XIcon, CheckSquare, Square } from 'lucide-react';
+import { Calendar, Plus, Filter, Download, X, Eye, Check, X as XIcon, CheckSquare, Square, Upload } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent } from '../components/ui/Card';
-import { createLeaveRequest, cancelLeaveRequest, getLeaveRequests, validateLeaveRequest, calculateLeaveDays, approveLeaveRequest, rejectLeaveRequest } from '../lib/leave';
+import { createLeaveRequest, cancelLeaveRequest, getLeaveRequests, validateLeaveRequest, calculateLeaveDays, approveLeaveRequest, rejectLeaveRequest, deleteLeaveRequest, bulkDeleteLeaveRequests } from '../lib/leave';
 import { useAuth } from '../contexts/AuthContext';
 import { getEmployees } from '../lib/employees';
 import type { LeaveRequest, LeaveType } from '../types';
+import * as XLSX from 'xlsx';
 
 export const Leave = () => {
   const { user } = useAuth();
@@ -32,6 +33,13 @@ export const Leave = () => {
   const [bulkComments, setBulkComments] = useState('');
   const [bulkSubmitting, setBulkSubmitting] = useState(false);
   const [viewModal, setViewModal] = useState<{ show: boolean; request: LeaveRequest | null }>({ show: false, request: null });
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [parsedLeaves, setParsedLeaves] = useState<any[]>([]);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [deleteModal, setDeleteModal] = useState<{ show: boolean; request: LeaveRequest | null }>({ show: false, request: null });
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+  const [bulkDeleteModal, setBulkDeleteModal] = useState({ show: false });
+  const [bulkDeleteSubmitting, setBulkDeleteSubmitting] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -69,6 +77,725 @@ export const Leave = () => {
     const startDate = new Date(start);
     const endDate = new Date(end);
     return calculateLeaveDays(startDate, endDate);
+  };
+
+  const mapLeaveType = (code: string): LeaveType => {
+    switch (code) {
+      case 'AL': return 'annual';
+      case 'SICK':
+      case 'MC':
+      case 'S': return 'medical';
+      case 'EL': return 'emergency';
+      case 'SP':
+      case 'SUS':
+      case 'NL': return 'unpaid';
+      case 'FL': return 'compassionate';
+      case 'OFF': return 'off_day';
+      case 'HD': return 'duty';
+      case 'AB': return 'unpaid';
+      default: return 'annual';
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingFile(true);
+    try {
+      // Ensure employees are loaded
+      if (employees.length === 0) {
+        const empData = await getEmployees();
+        setEmployees(empData);
+        console.log('Loaded employees for upload:', empData.length);
+      }
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data, { type: 'array' });
+      
+      console.log('Workbook sheets:', workbook.SheetNames);
+      
+      // Parse all sheets
+      const allParsedData: any[] = [];
+      
+      for (const sheetName of workbook.SheetNames) {
+        const sheet = workbook.Sheets[sheetName];
+        const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
+        
+        console.log(`Processing sheet: ${sheetName}, rows: ${jsonData.length}`);
+
+      // Detect format type
+      let formatType = 'standard';
+
+      // Check if this is summary format (has leave type columns like AL, MC, etc.)
+      // Summary format: data rows should have numeric values in leave type columns
+      // Standard format: data rows have IN/OUT times in daily columns, leave type columns are just headers
+      let summaryHeaderRowIndex = -1;
+
+      // First find a row with leave type codes and employee ID
+      for (let i = 0; i < Math.min(5, jsonData.length); i++) {
+        const row = jsonData[i];
+        if (row && row.some((cell: any) => {
+          const cellStr = String(cell).toUpperCase().trim();
+          return ['OFF', 'MC', 'EL', 'AL', 'SUS', 'FL', 'S', 'HD', 'AB', 'NL', 'SP'].includes(cellStr);
+        }) && row.some((cell: any) => {
+          const cellStr = String(cell).toUpperCase().trim();
+          return cellStr === 'USER ID' || cellStr === 'S NO';
+        })) {
+          summaryHeaderRowIndex = i;
+          console.log('Found potential summary header row at', i);
+          break;
+        }
+      }
+
+      // Now check if data rows have numeric values in leave type columns (summary format)
+      // or IN/OUT times in daily columns (standard format)
+      // Look at the first actual data row (header row + 2 to skip header row)
+      if (summaryHeaderRowIndex >= 0 && summaryHeaderRowIndex + 2 < jsonData.length) {
+        const dataRow = jsonData[summaryHeaderRowIndex + 2]; // First employee data row
+        if (dataRow) {
+          console.log('Checking data row at index', summaryHeaderRowIndex + 2, 'for format detection');
+          console.log('Data row sample:', dataRow.slice(0, 10));
+          // Check if there are numeric values in the leave type columns (indices 70-80 based on logs)
+          // In summary format, these columns have numeric totals
+          let hasNumericLeaveValues = false;
+          for (let col = 70; col < Math.min(80, dataRow.length); col++) {
+            const val = dataRow[col];
+            if (val !== null && val !== undefined && val !== '' && typeof val === 'number') {
+              hasNumericLeaveValues = true;
+              break;
+            }
+          }
+          // Check if there are time values in daily columns (IN/OUT format)
+          // In standard format, columns 3-68 contain daily IN/OUT times or leave codes
+          let hasTimeValues = false;
+          for (let col = 3; col < Math.min(68, dataRow.length); col++) {
+            const val = dataRow[col];
+            // Check for any non-empty values (numeric times or leave codes like 'OFF')
+            if (val !== null && val !== undefined && val !== '') {
+              hasTimeValues = true;
+              break;
+            }
+          }
+          console.log('Has numeric leave values:', hasNumericLeaveValues, 'Has time values:', hasTimeValues);
+          if (hasNumericLeaveValues && !hasTimeValues) {
+            formatType = 'summary';
+            console.log('Confirmed summary format (numeric leave values)');
+          } else {
+            console.log('Standard format detected (has time values or no numeric leave values)');
+          }
+        }
+      }
+
+      console.log('Detected format type:', formatType);
+      console.log('Summary header row index:', summaryHeaderRowIndex);
+      console.log('About to check format type for parsing path');
+
+      // Only check for "User ID" header if summary format was NOT detected
+      // Summary format rows also have "User ID" but have leave type columns too
+      if (formatType !== 'summary') {
+        console.log('Checking for User ID header (standard format)');
+        for (let i = 0; i < jsonData.length; i++) {
+          if (jsonData[i] && jsonData[i][0] === 'User ID') {
+            formatType = 'standard';
+            break;
+          }
+        }
+      } else {
+        console.log('Skipping User ID check (summary format detected)');
+      }
+
+      console.log('After User ID check, formatType:', formatType);
+
+      console.log('About to enter standard format parsing block');
+      console.log('Final formatType:', formatType);
+      console.log('About to execute if (formatType === "standard")');
+
+      if (formatType === 'standard') {
+        console.log('Entering standard format parsing');
+      } else {
+        console.log('Entering summary format parsing');
+      }
+
+      console.log('Skipping S NO header check (summary format already detected)');
+
+      console.log('After S NO check, formatType:', formatType);
+
+      const parsed: any[] = [];
+
+      if (formatType === 'standard') {
+        // Parse standard format (IN/OUT columns per day)
+        // First, extract date headers to map column positions to actual dates
+        const dateHeaders: Record<number, string> = {};
+        
+        // Find header row (contains "User ID" or "S NO")
+        let headerRowIndex = -1;
+        let hasHeaderRow = false;
+        for (let i = 0; i < jsonData.length; i++) {
+          const row = jsonData[i];
+          if (row && row.some((cell: any) => {
+            const cellStr = String(cell).toUpperCase().trim();
+            return cellStr === 'USER ID' || cellStr === 'S NO';
+          })) {
+            headerRowIndex = i;
+            hasHeaderRow = true;
+            break;
+          }
+        }
+
+        // If no header row found, check if this is a format without headers (starts with serial number, ID, name)
+        if (!hasHeaderRow && jsonData.length > 0) {
+          const firstRow = jsonData[0] as any[];
+          console.log('No header row found, checking first row:', firstRow);
+          console.log('First row length:', firstRow?.length);
+          console.log('First row[0] type:', typeof firstRow?.[0], 'value:', firstRow?.[0]);
+          console.log('First row[1] type:', typeof firstRow?.[1], 'value:', firstRow?.[1]);
+          console.log('First row[2] type:', typeof firstRow?.[2], 'value:', firstRow?.[2]);
+          // Check if first column is a number (serial), second looks like ID, third looks like name
+          if (firstRow && firstRow.length >= 3 &&
+              typeof firstRow[0] === 'number' &&
+              typeof firstRow[1] === 'string' &&
+              typeof firstRow[2] === 'string') {
+            // This is a no-header format, treat row 0 as the first data row
+            headerRowIndex = -1; // No header row
+            console.log('Detected no-header format');
+          } else {
+            alert('Could not find recognized header row. Expected "User ID" or "S NO"');
+            setUploadingFile(false);
+            return;
+          }
+        }
+        
+        // Find the row with Excel serial dates (could be before or after header)
+        let dateRowIndex = -1;
+        for (let i = 0; i < jsonData.length; i++) {
+          const row = jsonData[i] as any[];
+          if (row.some((cell: any) => typeof cell === 'number' && cell > 40000)) {
+            dateRowIndex = i;
+            break;
+          }
+        }
+        
+        if (dateRowIndex === -1) {
+          for (let i = 0; i < jsonData.length; i++) {
+            const row = jsonData[i] as any[];
+            if (row.some((cell: any) => String(cell).match(/^\d{2}-[^\d]+-\d{2}$/))) {
+              dateRowIndex = i;
+              break;
+            }
+          }
+        }
+        
+        if (dateRowIndex >= 0 && dateRowIndex < jsonData.length) {
+          const dateRow = jsonData[dateRowIndex] as any[];
+          
+          // Map dates from date row to corresponding data columns
+          // Date row starts with empty cells, then dates at specific columns
+          // Data row has: S NO, User ID, Name, then IN/OUT pairs for each day
+          // We need to align the dates with the IN/OUT columns
+          
+          let dateIndex = 0;
+          for (let col = 0; col < dateRow.length; col++) {
+            const cell = dateRow[col];
+            const cellStr = String(cell);
+            
+            // Check for Excel serial date (number > 40000)
+            if (typeof cell === 'number' && cell > 40000) {
+              // Convert Excel serial date to JavaScript Date
+              const excelDate = new Date(Math.round((cell - 25569) * 86400 * 1000));
+              const isoDate = excelDate.toISOString().split('T')[0];
+              
+              // Map to data column: S NO(0), User ID(1), Name(2), then IN/OUT pairs starting at 3
+              // Each day has 2 columns (IN, OUT), so day 0 starts at column 3, day 1 at 5, etc.
+              const dataCol = 3 + (dateIndex * 2);
+              dateHeaders[dataCol] = isoDate;
+              dateIndex++;
+            }
+            // Check for Dhivehi text date format
+            else if (cellStr.match(/^\d{2}-[^\d]+-\d{2}$/)) {
+              const parts = cellStr.split('-');
+              if (parts.length === 3) {
+                const day = parseInt(parts[0], 10);
+                const year = parseInt('20' + parts[2], 10);
+                const dhivehiMonths: Record<string, number> = {
+                  'ޖަނަވަރީ': 0, 'ފެބްރުއަރީ': 1, 'މާރޗް': 2,
+                  'އޭޕްރިލް': 3, 'މެއި': 4, 'ޖޫން': 5,
+                  'ޖުލައި': 6, 'އޮގަސްޓް': 7, 'ސެޕްޓެމްބަރު': 8,
+                  'އޮކްޓޫބަރު': 9, 'ނޮވެމްބަރު': 10, 'ޑިސެމްބަރު': 11
+                };
+                const month = dhivehiMonths[parts[1]] || 0;
+                const date = new Date(year, month, day);
+                const isoDate = date.toISOString().split('T')[0];
+                
+                const dataCol = 3 + (dateIndex * 2);
+                dateHeaders[dataCol] = isoDate;
+                dateIndex++;
+              }
+            }
+          }
+        }
+        
+        // Determine starting row for data
+        const startRow = headerRowIndex >= 0 ? headerRowIndex + 1 : 0;
+
+        for (let i = startRow; i < jsonData.length; i++) {
+          const row = jsonData[i] as any[];
+          if (!row || row.length < 3) continue;
+
+          const empId = row[1]; // User ID is in column 1
+          const empName = row[2]; // Name is in column 2
+          if (!empId || empId === 'User ID') continue;
+          
+          // Normalize inputs for matching
+          const empIdNorm = String(empId).trim().toUpperCase();
+          const empNameNorm = String(empName).trim().toLowerCase();
+          
+          console.log('Matching employee:', empIdNorm, empNameNorm);
+          
+          // Match with existing employee in system (more flexible matching)
+          const matchedEmp = employees.find(e => {
+            const sysEmpId = String(e.employeeId).trim().toUpperCase();
+            const sysName = String(e.fullName).trim().toLowerCase();
+            const empIdMatch = sysEmpId === empIdNorm;
+            const empNameMatch = sysName === empNameNorm;
+            
+            // Flexible ID matching: check if one ID contains the other (e.g., MAD0653 vs AD0653)
+            const empIdContains = sysEmpId.includes(empIdNorm) || empIdNorm.includes(sysEmpId);
+            // Also try matching by removing common prefixes
+            const empIdNumMatch = sysEmpId.replace(/^[A-Z]+/, '') === empIdNorm.replace(/^[A-Z]+/, '');
+            
+            // Also try partial name matching (first name or last name)
+            const empNameParts = empNameNorm.split(' ');
+            const empNamePartial = empNameParts.some(part => 
+              part.length > 2 && sysName.includes(part)
+            );
+            
+            if (empIdMatch || empNameMatch || empNamePartial || empIdContains || empIdNumMatch) {
+              console.log('Matched with system employee:', sysEmpId, sysName, 'via:', 
+                empIdMatch ? 'ID' : empNameMatch ? 'Name' : empNamePartial ? 'Partial Name' : empIdContains ? 'ID Contains' : 'ID Num');
+            }
+            
+            return empIdMatch || empNameMatch || empNamePartial || empIdContains || empIdNumMatch;
+          });
+          
+          if (!matchedEmp) {
+            console.log('No match found for:', empIdNorm, empNameNorm);
+          }
+          
+          
+          // Parse each column that has a date header
+          for (const [col, dateStr] of Object.entries(dateHeaders)) {
+            const colIndex = parseInt(col, 10);
+            if (colIndex >= row.length) continue;
+            
+            const value = row[colIndex];
+            if (!value) continue;
+            
+            // Check for leave codes
+            let leaveType = null;
+            if (['AL', 'EL', 'SICK', 'SP', 'FL', 'OFF', 'MC', 'SUS', 'NL', 'HD', 'AB'].includes(value)) {
+              leaveType = value;
+            } else if (value === '1' || typeof value === 'number') {
+              continue;
+            }
+            
+            if (leaveType) {
+              parsed.push({
+                employeeId: empId,
+                employeeName: empName,
+                matchedEmployeeId: matchedEmp?.id || null,
+                date: dateStr,
+                leaveType: leaveType,
+                mappedType: mapLeaveType(leaveType),
+                selected: true,
+                matched: !!matchedEmp,
+                isSummary: false
+              });
+            }
+          }
+        }
+      } else {
+        // Parse summary format (leave type columns at the end)
+        // Use the detected summary header row index
+        console.log('Entering summary format parsing');
+        console.log('Summary header row index:', summaryHeaderRowIndex);
+
+        // Extract month and year from first row (e.g., "Attendance - JANUARY 2026 -Male Local Staffs")
+        let summaryMonth = '01';
+        let summaryYear = '2026';
+        if (jsonData.length > 0 && jsonData[0]) {
+          const firstRowStr = String((jsonData[0] as any[])[0] || '');
+          console.log('First row for date extraction:', firstRowStr);
+          const monthMatch = firstRowStr.match(/([A-Z]{3,9})\s+(\d{4})/);
+          console.log('Month match result:', monthMatch);
+          if (monthMatch) {
+            const monthName = monthMatch[1];
+            summaryYear = monthMatch[2];
+            const months: Record<string, string> = {
+              'JANUARY': '01', 'FEBRUARY': '02', 'MARCH': '03', 'APRIL': '04',
+              'MAY': '05', 'JUNE': '06', 'JULY': '07', 'AUGUST': '08',
+              'SEPTEMBER': '09', 'OCTOBER': '10', 'NOVEMBER': '11', 'DECEMBER': '12'
+            };
+            summaryMonth = months[monthName] || '01';
+            console.log('Extracted month:', summaryMonth, 'year:', summaryYear);
+          } else {
+            console.log('No month match found, trying alternative pattern');
+            const altMatch = firstRowStr.match(/([A-Z]{3,9})/);
+            if (altMatch) {
+              const monthName = altMatch[1];
+              const months: Record<string, string> = {
+                'JANUARY': '01', 'FEBRUARY': '02', 'MARCH': '03', 'APRIL': '04',
+                'MAY': '05', 'JUNE': '06', 'JULY': '07', 'AUGUST': '08',
+                'SEPTEMBER': '09', 'OCTOBER': '10', 'NOVEMBER': '11', 'DECEMBER': '12'
+              };
+              summaryMonth = months[monthName] || '01';
+              console.log('Alternative match - month:', summaryMonth);
+            }
+            const yearMatch = firstRowStr.match(/(\d{4})/);
+            if (yearMatch) {
+              summaryYear = yearMatch[1];
+              console.log('Alternative match - year:', summaryYear);
+            }
+          }
+        }
+        const summaryDate = `${summaryYear}-${summaryMonth}-01`;
+        console.log('Final summary date:', summaryDate);
+
+        let headerRow = null;
+        let headerRowIndex = summaryHeaderRowIndex;
+
+        if (headerRowIndex >= 0) {
+          headerRow = jsonData[headerRowIndex] as any[];
+          console.log('Using summary header row:', headerRowIndex);
+        } else {
+          // Fallback: try to find header row
+          console.log('No summary header index found, searching for User ID header');
+          for (let i = 0; i < jsonData.length; i++) {
+            const row = jsonData[i] as any[];
+            if (row && row.some((cell: any) => {
+              const cellStr = String(cell).toUpperCase().trim();
+              return cellStr === 'USER ID' || cellStr === 'S NO';
+            })) {
+              headerRow = row;
+              headerRowIndex = i;
+              console.log('Found header row at:', i);
+              break;
+            }
+          }
+        }
+
+        console.log('Final header row index:', headerRowIndex);
+        console.log('Header row:', headerRow);
+
+        const leaveTypeCols: Record<string, number> = {};
+
+        if (headerRow) {
+          // Has header row - find leave type columns
+          console.log('Scanning header row for leave type columns:', headerRow.length, 'columns');
+          for (let col = 0; col < headerRow.length; col++) {
+            const cell = String((headerRow as any[])[col]).toUpperCase().trim();
+            if (['OFF', 'MC', 'EL', 'AL', 'SUS', 'FL', 'S', 'HD', 'AB', 'NL', 'SP'].includes(cell)) {
+              leaveTypeCols[cell] = col;
+              console.log(`Found leave type column: ${cell} at index ${col}`);
+            }
+          }
+          console.log('Leave type columns found:', leaveTypeCols);
+        } else {
+          // No header row - scan data rows to find columns with leave codes
+          // Look at first few data rows to identify leave type columns
+          const sampleRows = jsonData.slice(0, Math.min(10, jsonData.length)) as any[][];
+          for (let col = 3; col < sampleRows[0]?.length; col++) {
+            const hasLeaveCode = sampleRows.some((row: any[]) => {
+              const cell = row[col];
+              const cellStr = String(cell).toUpperCase().trim();
+              return ['OFF', 'MC', 'EL', 'AL', 'SUS', 'FL', 'S', 'HD', 'AB', 'NL', 'SP', 'SICK'].includes(cellStr);
+            });
+            if (hasLeaveCode) {
+              // This column contains leave codes - we'll treat each unique code as a separate entry
+            }
+          }
+        }
+
+        // Find column indices for User ID and Name
+        let userIdCol = 1;
+        let nameCol = 2;
+        if (headerRow) {
+          userIdCol = (headerRow as any[]).findIndex((h: any) => String(h).toUpperCase().includes('USER ID'));
+          nameCol = (headerRow as any[]).findIndex((h: any) => String(h).toUpperCase().includes('NAME'));
+        }
+        if (userIdCol === -1) userIdCol = 1;
+        if (nameCol === -1) nameCol = 2;
+
+        // Determine starting row for data
+        const startRow = headerRowIndex >= 0 ? headerRowIndex + 1 : 0;
+
+        // Parse each row and match with existing employees
+        for (let i = startRow; i < jsonData.length; i++) {
+          const row = jsonData[i] as any[];
+          if (!row || row.length < 3) continue;
+
+          const empId = row[userIdCol];
+          const empName = row[nameCol];
+          if (!empId || !empName) continue;
+
+          // Match with existing employee in system
+          const matchedEmp = employees.find(e =>
+            e.employeeId === empId ||
+            e.fullName === empName ||
+            String(e.employeeId) === String(empId)
+          );
+
+          // If we have leave type columns from header, use those
+          if (Object.keys(leaveTypeCols).length > 0) {
+            for (const [leaveType, colIndex] of Object.entries(leaveTypeCols)) {
+              const value = row[colIndex as unknown as number];
+              if (value && value !== 0 && value !== '0') {
+                parsed.push({
+                  employeeId: empId,
+                  employeeName: empName,
+                  matchedEmployeeId: matchedEmp?.id || null,
+                  date: summaryDate,
+                  leaveType: leaveType,
+                  mappedType: mapLeaveType(leaveType),
+                  days: value,
+                  selected: true,
+                  isSummary: true,
+                  matched: !!matchedEmp
+                });
+              }
+            }
+          } else {
+            // No header - scan all columns for leave codes
+            for (let col = 3; col < row.length; col++) {
+              const value = row[col];
+              const valueStr = String(value).toUpperCase().trim();
+              if (['AL', 'EL', 'SICK', 'SP', 'FL', 'OFF', 'MC', 'SUS', 'NL', 'HD', 'AB'].includes(valueStr)) {
+                parsed.push({
+                  employeeId: empId,
+                  employeeName: empName,
+                  matchedEmployeeId: matchedEmp?.id || null,
+                  date: summaryDate,
+                  leaveType: valueStr,
+                  mappedType: mapLeaveType(valueStr),
+                  days: 1,
+                  selected: true,
+                  isSummary: true,
+                  matched: !!matchedEmp
+                });
+              }
+            }
+          }
+        }
+      }
+      
+      // Add parsed data from this sheet to allParsedData
+      allParsedData.push(...parsed);
+      console.log(`Sheet ${sheetName} parsed: ${parsed.length} records`);
+    }
+    
+    setParsedLeaves(allParsedData);
+    setShowUploadModal(true);
+    console.log(`Total parsed records from all sheets: ${allParsedData.length}`);
+    } catch (error) {
+      console.error('Error parsing Excel:', error);
+      alert('Error parsing Excel file');
+    } finally {
+      setUploadingFile(false);
+    }
+  };
+
+  const handleExportToMarkdown = () => {
+    const mdContent = parsedLeaves.map(leave => {
+      const status = leave.matched ? '✓' : '✗';
+      return `| ${leave.employeeId} | ${leave.employeeName} | ${leave.date} | ${leave.leaveType} | ${leave.mappedType} | ${leave.days || 1} | ${status} |`;
+    }).join('\n');
+    
+    const header = `| Employee ID | Name | Date | Leave Type | Mapped Type | Days | Matched |\n|-------------|------|------|------------|-------------|------|--------|\n`;
+    const fullContent = header + mdContent;
+    
+    const blob = new Blob([fullContent], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `leaves_export_${new Date().toISOString().split('T')[0]}.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleSaveParsedLeaves = async () => {
+    const selectedLeaves = parsedLeaves.filter(l => l.selected);
+    if (selectedLeaves.length === 0) {
+      alert('No leaves selected to import');
+      return;
+    }
+    
+    let successCount = 0;
+    let errorCount = 0;
+    
+    // Separate summary format and standard format entries
+    const summaryLeaves = selectedLeaves.filter(l => l.isSummary);
+    const standardLeaves = selectedLeaves.filter(l => !l.isSummary);
+    
+    // Process summary format entries (have matchedEmployeeId and days)
+    for (const leave of summaryLeaves) {
+      if (!leave.matchedEmployeeId) {
+        console.log(`Employee ${leave.employeeId} (${leave.employeeName}) not matched in system`);
+        errorCount++;
+        continue;
+      }
+      
+      try {
+        await createLeaveRequest({
+          employeeId: leave.matchedEmployeeId,
+          type: leave.mappedType,
+          startDate: new Date(leave.date),
+          endDate: new Date(leave.date), // Single day for summary format
+          days: leave.days || 1,
+          reason: `Imported from Excel Summary (${leave.leaveType})`
+        });
+        successCount++;
+      } catch (error) {
+        console.error('Error importing summary leave:', error);
+        errorCount++;
+      }
+    }
+    
+    // Process standard format entries (group by employee and consecutive days)
+    if (standardLeaves.length > 0) {
+      const grouped = groupLeavesByEmployee(standardLeaves);
+      
+      for (const group of grouped) {
+        try {
+          // Use matchedEmployeeId if available, otherwise fallback to finding by employeeId
+          let empId = null;
+          
+          // Check if any of the leaves in this group has a matchedEmployeeId
+          const matchedId = standardLeaves.find(l => l.employeeId === group.employeeId)?.matchedEmployeeId;
+          if (matchedId) {
+            empId = matchedId;
+          } else {
+            const emp = employees.find(e => e.employeeId === group.employeeId);
+            empId = emp?.id;
+          }
+          
+          if (!empId) {
+            console.log(`Employee ${group.employeeId} not found`);
+            errorCount++;
+            continue;
+          }
+          
+          for (const leave of group.leaves) {
+            await createLeaveRequest({
+              employeeId: empId,
+              type: leave.type,
+              startDate: new Date(leave.startDate),
+              endDate: new Date(leave.endDate),
+              days: leave.days,
+              reason: `Imported from Excel (${leave.type})`
+            });
+            successCount++;
+          }
+        } catch (error) {
+          console.error('Error importing leave:', error);
+          errorCount++;
+        }
+      }
+    }
+    
+    alert(`Import complete: ${successCount} successful, ${errorCount} errors`);
+    setShowUploadModal(false);
+    setParsedLeaves([]);
+    loadData();
+  };
+
+  const handleDeleteLeave = async (request: LeaveRequest) => {
+    try {
+      setDeleteSubmitting(true);
+      await deleteLeaveRequest(request.id);
+      setDeleteModal({ show: false, request: null });
+      loadData();
+    } catch (error) {
+      console.error('Error deleting leave:', error);
+      alert('Error deleting leave request');
+    } finally {
+      setDeleteSubmitting(false);
+    }
+  };
+
+  const handleBulkDeleteLeaves = async () => {
+    try {
+      setBulkDeleteSubmitting(true);
+      const selectedIds = Array.from(selectedRequests);
+      await bulkDeleteLeaveRequests(selectedIds);
+      setBulkDeleteModal({ show: false });
+      setSelectedRequests(new Set());
+      loadData();
+    } catch (error) {
+      console.error('Error bulk deleting leaves:', error);
+      alert('Error deleting leave requests');
+    } finally {
+      setBulkDeleteSubmitting(false);
+    }
+  };
+
+  const groupLeavesByEmployee = (leaves: any[]) => {
+    const byEmployee: Record<string, any[]> = {};
+    
+    leaves.forEach(leave => {
+      if (!byEmployee[leave.employeeId]) {
+        byEmployee[leave.employeeId] = [];
+      }
+      byEmployee[leave.employeeId].push(leave);
+    });
+    
+    const result = Object.entries(byEmployee).map(([empId, empLeaves]) => {
+      // Sort by date
+      empLeaves.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      
+      // Group consecutive days with same type
+      const groups: any[] = [];
+      let currentGroup: any = null;
+      
+      empLeaves.forEach(leave => {
+        if (!currentGroup) {
+          currentGroup = {
+            type: leave.mappedType,
+            startDate: leave.date,
+            endDate: leave.date,
+            days: 1
+          };
+        } else {
+          const prevDate = new Date(currentGroup.endDate);
+          prevDate.setDate(prevDate.getDate() + 1);
+          const currDate = new Date(leave.date);
+          
+          if (prevDate.getTime() === currDate.getTime() && currentGroup.type === leave.mappedType) {
+            currentGroup.endDate = leave.date;
+            currentGroup.days++;
+          } else {
+            groups.push(currentGroup);
+            currentGroup = {
+              type: leave.mappedType,
+              startDate: leave.date,
+              endDate: leave.date,
+              days: 1
+            };
+          }
+        }
+      });
+      
+      if (currentGroup) {
+        groups.push(currentGroup);
+      }
+      
+      return {
+        employeeId: empId,
+        leaves: groups
+      };
+    });
+    
+    return result;
   };
 
   const openLeaveForm = () => {
@@ -260,6 +987,18 @@ export const Leave = () => {
     off_day: 'bg-indigo-100 text-indigo-800',
   };
 
+  const typeLabels: Record<LeaveType, string> = {
+    annual: 'Annual Leave',
+    medical: 'Sick Leave',
+    emergency: 'Emergency Leave',
+    duty: 'Duty Leave',
+    unpaid: 'Unpaid Leave',
+    maternity: 'Maternity Leave',
+    paternity: 'Paternity Leave',
+    compassionate: 'Compassionate Leave',
+    off_day: 'Off Day',
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -276,10 +1015,26 @@ export const Leave = () => {
           <h1 className="text-3xl font-bold text-secondary-900">Leave Management</h1>
           <p className="text-secondary-600 mt-1">Manage leave requests and balances</p>
         </div>
-        <Button onClick={openLeaveForm} className="sm:w-auto w-full">
-          <Plus className="w-5 h-5 mr-2" />
-          Apply for Leave
-        </Button>
+        <div className="flex gap-2 sm:w-auto w-full">
+          <input
+            type="file"
+            accept=".xlsx,.xls"
+            onChange={handleFileUpload}
+            className="hidden"
+            id="excel-upload"
+          />
+          <Button onClick={() => {
+            const input = document.getElementById('excel-upload');
+            input?.click();
+          }} disabled={uploadingFile} className="sm:w-auto w-full">
+            <Upload className="w-5 h-5 mr-2" />
+            {uploadingFile ? 'Parsing...' : 'Import from Excel'}
+          </Button>
+          <Button onClick={openLeaveForm} className="sm:w-auto w-full">
+            <Plus className="w-5 h-5 mr-2" />
+            Apply for Leave
+          </Button>
+        </div>
       </div>
 
       {showLeaveForm && (
@@ -500,6 +1255,15 @@ export const Leave = () => {
                 </Button>
               </div>
             )}
+            {activeTab === 'approved' && selectedRequests.size > 0 && (
+              <Button
+                onClick={() => setBulkDeleteModal({ show: true })}
+                className="bg-red-600 hover:bg-red-700 flex-1 sm:flex-none"
+              >
+                <XIcon className="w-5 h-5 mr-2" />
+                Delete ({selectedRequests.size})
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -520,7 +1284,7 @@ export const Leave = () => {
               >
                 <div className="flex justify-between items-start mb-3">
                   <div className="flex items-center gap-2">
-                    {activeTab === 'pending' && (
+                    {(activeTab === 'pending' || activeTab === 'approved') && (
                       <button
                         onClick={() => handleSelectRequest(request.id)}
                         className="hover:text-primary-600"
@@ -550,7 +1314,7 @@ export const Leave = () => {
                   <div className="flex justify-between">
                     <span className="text-secondary-600">Type:</span>
                     <span className={`px-2 py-1 rounded-full text-xs font-semibold ${typeColors[request.type]}`}>
-                      {request.type}
+                      {typeLabels[request.type]}
                     </span>
                   </div>
                   <div className="flex justify-between">
@@ -605,6 +1369,15 @@ export const Leave = () => {
                       </button>
                     </>
                   )}
+                  {activeTab === 'approved' && (
+                    <button
+                      onClick={() => setDeleteModal({ show: true, request })}
+                      className="flex-1 sm:flex-none px-3 py-2 bg-red-600 text-white rounded-lg text-xs sm:text-sm flex items-center justify-center gap-1"
+                    >
+                      <XIcon className="w-4 h-4" />
+                      <span>Delete</span>
+                    </button>
+                  )}
                 </div>
               </motion.div>
             );
@@ -618,7 +1391,7 @@ export const Leave = () => {
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-medium text-secondary-600 uppercase tracking-wider">
                   <button onClick={handleSelectAll} className="hover:text-primary-600">
-                    {selectedRequests.size === filteredRequests.filter(r => r.status === 'pending').length && selectedRequests.size > 0 ? (
+                    {selectedRequests.size === filteredRequests.length && selectedRequests.size > 0 ? (
                       <CheckSquare className="w-5 h-5" />
                     ) : (
                       <Square className="w-5 h-5" />
@@ -660,7 +1433,7 @@ export const Leave = () => {
                   className="hover:bg-secondary-50"
                 >
                   <td className="px-4 py-4 whitespace-nowrap">
-                    {activeTab === 'pending' && (
+                    {(activeTab === 'pending' || activeTab === 'approved') && (
                       <button
                         onClick={() => handleSelectRequest(request.id)}
                         className="hover:text-primary-600"
@@ -683,7 +1456,7 @@ export const Leave = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${typeColors[request.type]}`}>
-                      {request.type}
+                      {typeLabels[request.type]}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -736,6 +1509,15 @@ export const Leave = () => {
                           </button>
                         </>
                       )}
+                      {activeTab === 'approved' && (
+                        <button
+                          onClick={() => setDeleteModal({ show: true, request })}
+                          className="text-red-600 hover:text-red-900"
+                          title="Delete"
+                        >
+                          <XIcon className="w-5 h-5" />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </motion.tr>
@@ -767,7 +1549,7 @@ export const Leave = () => {
                   <strong>Employee:</strong> {employees.find(emp => emp.id === approvalModal.request?.employeeId)?.fullName || 'Unknown'}
                 </p>
                 <p className="text-sm text-secondary-600">
-                  <strong>Type:</strong> {approvalModal.request.type}
+                  <strong>Type:</strong> {typeLabels[approvalModal.request.type]}
                 </p>
                 <p className="text-sm text-secondary-600">
                   <strong>Dates:</strong> {new Date(approvalModal.request.startDate).toLocaleDateString()} - {new Date(approvalModal.request.endDate).toLocaleDateString()}
@@ -818,7 +1600,7 @@ export const Leave = () => {
               <h3 className="text-lg font-semibold text-secondary-900 mb-4">
                 {bulkModal.action === 'approve' ? `Approve ${selectedRequests.size} Leave Requests` : `Reject ${selectedRequests.size} Leave Requests`}
               </h3>
-              
+
               <div className="mb-4">
                 <p className="text-sm text-secondary-600">
                   You are about to {bulkModal.action} <strong>{selectedRequests.size}</strong> leave request(s).
@@ -855,6 +1637,179 @@ export const Leave = () => {
         </div>
       )}
 
+      {/* Delete Confirmation Modal */}
+      {deleteModal.show && deleteModal.request && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <Card className="w-full max-w-md mx-4">
+            <CardContent className="p-6">
+              <h3 className="text-lg font-semibold text-secondary-900 mb-4">
+                Delete Leave Request
+              </h3>
+
+              <div className="mb-4">
+                <p className="text-sm text-secondary-600">
+                  Are you sure you want to delete this leave request for <strong>{employees.find(emp => emp.id === deleteModal.request?.employeeId)?.fullName || 'Unknown'}</strong>?
+                </p>
+                <p className="text-sm text-secondary-600 mt-2">
+                  <strong>Type:</strong> {typeLabels[deleteModal.request.type]}
+                </p>
+                <p className="text-sm text-secondary-600">
+                  <strong>Dates:</strong> {new Date(deleteModal.request.startDate).toLocaleDateString()} - {new Date(deleteModal.request.endDate).toLocaleDateString()}
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  onClick={() => handleDeleteLeave(deleteModal.request!)}
+                  loading={deleteSubmitting}
+                  className="bg-red-600 hover:bg-red-700"
+                >
+                  Delete
+                </Button>
+                <Button variant="secondary" onClick={() => setDeleteModal({ show: false, request: null })}>
+                  Cancel
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Bulk Delete Confirmation Modal */}
+      {bulkDeleteModal.show && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <Card className="w-full max-w-md mx-4">
+            <CardContent className="p-6">
+              <h3 className="text-lg font-semibold text-secondary-900 mb-4">
+                Delete {selectedRequests.size} Leave Requests
+              </h3>
+
+              <div className="mb-4">
+                <p className="text-sm text-secondary-600">
+                  Are you sure you want to delete <strong>{selectedRequests.size}</strong> approved leave request(s)? This action cannot be undone.
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  onClick={handleBulkDeleteLeaves}
+                  loading={bulkDeleteSubmitting}
+                  className="bg-red-600 hover:bg-red-700"
+                >
+                  Delete All
+                </Button>
+                <Button variant="secondary" onClick={() => setBulkDeleteModal({ show: false })}>
+                  Cancel
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Excel Upload Modal */}
+      {showUploadModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <Card className="w-full max-w-4xl mx-4 max-h-[90vh] overflow-hidden">
+            <CardContent className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold text-secondary-900">
+                  Review Imported Leaves ({parsedLeaves.length} records)
+                </h3>
+                <Button variant="secondary" onClick={() => setShowUploadModal(false)}>
+                  <X className="w-5 h-5" />
+                </Button>
+              </div>
+              
+              <div className="mb-4 max-h-96 overflow-y-auto">
+                <table className="min-w-full divide-y divide-secondary-200">
+                  <thead className="bg-secondary-50 sticky top-0">
+                    <tr>
+                      <th className="px-4 py-3 text-left">
+                        <input
+                          type="checkbox"
+                          checked={parsedLeaves.every(l => l.selected)}
+                          onChange={(e) => {
+                            const newSelected = e.target.checked;
+                            setParsedLeaves(parsedLeaves.map(l => ({ ...l, selected: newSelected })));
+                          }}
+                        />
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-secondary-600 uppercase">Employee ID</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-secondary-600 uppercase">Name</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-secondary-600 uppercase">Date</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-secondary-600 uppercase">Leave Type</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-secondary-600 uppercase">Mapped Type</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-secondary-600 uppercase">Days</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-secondary-600 uppercase">Matched</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-secondary-200">
+                    {parsedLeaves.map((leave, index) => (
+                      <tr key={index} className={`hover:bg-secondary-50 ${!leave.matched ? 'bg-red-50' : ''}`}>
+                        <td className="px-4 py-3">
+                          <input
+                            type="checkbox"
+                            checked={leave.selected}
+                            onChange={(e) => {
+                              const newLeaves = [...parsedLeaves];
+                              newLeaves[index].selected = e.target.checked;
+                              setParsedLeaves(newLeaves);
+                            }}
+                          />
+                        </td>
+                        <td className="px-4 py-3 text-sm text-secondary-900">{leave.employeeId}</td>
+                        <td className="px-4 py-3 text-sm text-secondary-900">{leave.employeeName}</td>
+                        <td className="px-4 py-3 text-sm text-secondary-900">
+                          {leave.isSummary ? (
+                            <input
+                              type="date"
+                              value={leave.date}
+                              onChange={(e) => {
+                                const newLeaves = [...parsedLeaves];
+                                newLeaves[index].date = e.target.value;
+                                setParsedLeaves(newLeaves);
+                              }}
+                              className="px-2 py-1 border border-secondary-300 rounded"
+                            />
+                          ) : (
+                            leave.date
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-secondary-900">{leave.leaveType}</td>
+                        <td className="px-4 py-3 text-sm text-secondary-900">{typeLabels[leave.mappedType as LeaveType]}</td>
+                        <td className="px-4 py-3 text-sm text-secondary-900">{leave.days || 1}</td>
+                        <td className="px-4 py-3 text-sm">
+                          {leave.matched !== undefined ? (
+                            <span className={leave.matched ? 'text-green-600' : 'text-red-600'}>
+                              {leave.matched ? '✓' : '✗'}
+                            </span>
+                          ) : (
+                            '-'
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex gap-3">
+                <Button onClick={handleSaveParsedLeaves} className="bg-green-600 hover:bg-green-700">
+                  Import Selected Leaves
+                </Button>
+                <Button variant="secondary" onClick={handleExportToMarkdown}>
+                  Export to Markdown
+                </Button>
+                <Button variant="secondary" onClick={() => setShowUploadModal(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* View Details Modal */}
       {viewModal.show && viewModal.request && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -869,7 +1824,7 @@ export const Leave = () => {
                   <strong>Employee:</strong> {employees.find(emp => emp.id === viewModal.request?.employeeId)?.fullName || 'Unknown'}
                 </p>
                 <p className="text-sm text-secondary-600">
-                  <strong>Type:</strong> {viewModal.request.type}
+                  <strong>Type:</strong> {typeLabels[viewModal.request.type]}
                 </p>
                 <p className="text-sm text-secondary-600">
                   <strong>Dates:</strong> {new Date(viewModal.request.startDate).toLocaleDateString()} - {new Date(viewModal.request.endDate).toLocaleDateString()}

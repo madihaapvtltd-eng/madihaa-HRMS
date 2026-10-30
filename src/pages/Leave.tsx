@@ -6,11 +6,14 @@ import { Card, CardContent } from '../components/ui/Card';
 import { createLeaveRequest, cancelLeaveRequest, getLeaveRequests, validateLeaveRequest, calculateLeaveDays, approveLeaveRequest, rejectLeaveRequest, deleteLeaveRequest, bulkDeleteLeaveRequests } from '../lib/leave';
 import { useAuth } from '../contexts/AuthContext';
 import { getEmployees } from '../lib/employees';
+import { usePermissions } from '../hooks/usePermissions';
+import { PERMISSIONS } from '../lib/permissions';
 import type { LeaveRequest, LeaveType } from '../types';
 import * as XLSX from 'xlsx';
 
 export const Leave = () => {
   const { user } = useAuth();
+  const { can } = usePermissions();
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'pending' | 'approved' | 'rejected'>('pending');
@@ -1023,17 +1026,21 @@ export const Leave = () => {
             className="hidden"
             id="excel-upload"
           />
-          <Button onClick={() => {
-            const input = document.getElementById('excel-upload');
-            input?.click();
-          }} disabled={uploadingFile} className="sm:w-auto w-full">
-            <Upload className="w-5 h-5 mr-2" />
-            {uploadingFile ? 'Parsing...' : 'Import from Excel'}
-          </Button>
-          <Button onClick={openLeaveForm} className="sm:w-auto w-full">
-            <Plus className="w-5 h-5 mr-2" />
-            Apply for Leave
-          </Button>
+          {can(PERMISSIONS.LEAVE_IMPORT) && (
+            <Button onClick={() => {
+              const input = document.getElementById('excel-upload');
+              input?.click();
+            }} disabled={uploadingFile} className="sm:w-auto w-full">
+              <Upload className="w-5 h-5 mr-2" />
+              {uploadingFile ? 'Parsing...' : 'Import from Excel'}
+            </Button>
+          )}
+          {can(PERMISSIONS.LEAVE_REQUEST) && (
+            <Button onClick={openLeaveForm} className="sm:w-auto w-full">
+              <Plus className="w-5 h-5 mr-2" />
+              Apply for Leave
+            </Button>
+          )}
         </div>
       </div>
 
@@ -1237,7 +1244,7 @@ export const Leave = () => {
                 Export
               </Button>
             </div>
-            {activeTab === 'pending' && selectedRequests.size > 0 && (
+            {activeTab === 'pending' && selectedRequests.size > 0 && can(PERMISSIONS.LEAVE_APPROVE) && (
               <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                 <Button
                   onClick={() => handleOpenBulkApproval('approve')}
@@ -1246,16 +1253,18 @@ export const Leave = () => {
                   <Check className="w-5 h-5 mr-2" />
                   Approve ({selectedRequests.size})
                 </Button>
-                <Button
-                  onClick={() => handleOpenBulkApproval('reject')}
-                  className="bg-red-600 hover:bg-red-700 flex-1 sm:flex-none"
-                >
-                  <XIcon className="w-5 h-5 mr-2" />
-                  Reject ({selectedRequests.size})
-                </Button>
+                {can(PERMISSIONS.LEAVE_REJECT) && (
+                  <Button
+                    onClick={() => handleOpenBulkApproval('reject')}
+                    className="bg-red-600 hover:bg-red-700 flex-1 sm:flex-none"
+                  >
+                    <XIcon className="w-5 h-5 mr-2" />
+                    Reject ({selectedRequests.size})
+                  </Button>
+                )}
               </div>
             )}
-            {activeTab === 'approved' && selectedRequests.size > 0 && (
+            {activeTab === 'approved' && selectedRequests.size > 0 && can(PERMISSIONS.LEAVE_DELETE) && (
               <Button
                 onClick={() => setBulkDeleteModal({ show: true })}
                 className="bg-red-600 hover:bg-red-700 flex-1 sm:flex-none"
@@ -1344,7 +1353,7 @@ export const Leave = () => {
                     <Eye className="w-4 h-4" />
                     <span>View</span>
                   </button>
-                  {activeTab === 'pending' && (
+                  {activeTab === 'pending' && can(PERMISSIONS.LEAVE_APPROVE) && (
                     <>
                       <button
                         onClick={() => handleOpenApproval(request, 'approve')}
@@ -1353,23 +1362,27 @@ export const Leave = () => {
                         <Check className="w-4 h-4" />
                         <span>Approve</span>
                       </button>
-                      <button
-                        onClick={() => handleOpenApproval(request, 'reject')}
-                        className="flex-1 sm:flex-none px-3 py-2 bg-red-600 text-white rounded-lg text-xs sm:text-sm flex items-center justify-center gap-1"
-                      >
-                        <XIcon className="w-4 h-4" />
-                        <span>Reject</span>
-                      </button>
-                      <button
-                        onClick={() => handleCancelRequest(request.id)}
-                        className="flex-1 sm:flex-none px-3 py-2 bg-secondary-600 text-white rounded-lg text-xs sm:text-sm flex items-center justify-center gap-1"
-                      >
-                        <XIcon className="w-4 h-4" />
-                        <span>Cancel</span>
-                      </button>
+                      {can(PERMISSIONS.LEAVE_REJECT) && (
+                        <button
+                          onClick={() => handleOpenApproval(request, 'reject')}
+                          className="flex-1 sm:flex-none px-3 py-2 bg-red-600 text-white rounded-lg text-xs sm:text-sm flex items-center justify-center gap-1"
+                        >
+                          <XIcon className="w-4 h-4" />
+                          <span>Reject</span>
+                        </button>
+                      )}
+                      {can(PERMISSIONS.LEAVE_CANCEL_OWN) && (
+                        <button
+                          onClick={() => handleCancelRequest(request.id)}
+                          className="flex-1 sm:flex-none px-3 py-2 bg-secondary-600 text-white rounded-lg text-xs sm:text-sm flex items-center justify-center gap-1"
+                        >
+                          <XIcon className="w-4 h-4" />
+                          <span>Cancel</span>
+                        </button>
+                      )}
                     </>
                   )}
-                  {activeTab === 'approved' && (
+                  {activeTab === 'approved' && can(PERMISSIONS.LEAVE_DELETE) && (
                     <button
                       onClick={() => setDeleteModal({ show: true, request })}
                       className="flex-1 sm:flex-none px-3 py-2 bg-red-600 text-white rounded-lg text-xs sm:text-sm flex items-center justify-center gap-1"
@@ -1484,7 +1497,7 @@ export const Leave = () => {
                       >
                         <Eye className="w-5 h-5" />
                       </button>
-                      {activeTab === 'pending' && (
+                      {activeTab === 'pending' && can(PERMISSIONS.LEAVE_APPROVE) && (
                         <>
                           <button
                             onClick={() => handleOpenApproval(request, 'approve')}
@@ -1493,23 +1506,27 @@ export const Leave = () => {
                           >
                             <Check className="w-5 h-5" />
                           </button>
-                          <button
-                            onClick={() => handleOpenApproval(request, 'reject')}
-                            className="text-red-600 hover:text-red-900"
-                            title="Reject"
-                          >
-                            <XIcon className="w-5 h-5" />
-                          </button>
-                          <button
-                            onClick={() => handleCancelRequest(request.id)}
-                            className="text-secondary-600 hover:text-secondary-900"
-                            title="Cancel"
-                          >
-                            <X className="w-5 h-5" />
-                          </button>
+                          {can(PERMISSIONS.LEAVE_REJECT) && (
+                            <button
+                              onClick={() => handleOpenApproval(request, 'reject')}
+                              className="text-red-600 hover:text-red-900"
+                              title="Reject"
+                            >
+                              <XIcon className="w-5 h-5" />
+                            </button>
+                          )}
+                          {can(PERMISSIONS.LEAVE_CANCEL_OWN) && (
+                            <button
+                              onClick={() => handleCancelRequest(request.id)}
+                              className="text-secondary-600 hover:text-secondary-900"
+                              title="Cancel"
+                            >
+                              <X className="w-5 h-5" />
+                            </button>
+                          )}
                         </>
                       )}
-                      {activeTab === 'approved' && (
+                      {activeTab === 'approved' && can(PERMISSIONS.LEAVE_DELETE) && (
                         <button
                           onClick={() => setDeleteModal({ show: true, request })}
                           className="text-red-600 hover:text-red-900"

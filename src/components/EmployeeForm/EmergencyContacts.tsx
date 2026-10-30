@@ -6,12 +6,13 @@ import type { EmergencyContact } from '../../types';
 
 interface EmergencyContactsProps {
   contacts?: EmergencyContact[];
+  employee?: { fullName?: string; firstName?: string; lastName?: string };
   onNext: (data: EmergencyContact[]) => void;
   onPrev: () => void;
   onSave?: () => Promise<void>;
 }
 
-export const EmergencyContacts = ({ contacts = [], onNext, onPrev, onSave }: EmergencyContactsProps) => {
+export const EmergencyContacts = ({ contacts = [], employee, onNext, onPrev, onSave }: EmergencyContactsProps) => {
   const [isSaving, setIsSaving] = useState(false);
   const [emergencyContacts, setEmergencyContacts] = useState<EmergencyContact[]>(contacts);
   const [formData, setFormData] = useState<EmergencyContact>({
@@ -60,6 +61,13 @@ export const EmergencyContacts = ({ contacts = [], onNext, onPrev, onSave }: Eme
 
   return (
     <div className="space-y-6">
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold text-gray-900">
+          {employee?.fullName || employee?.firstName && employee?.lastName 
+            ? `${employee.firstName} ${employee.lastName}`
+            : 'Employee Details'}
+        </h2>
+      </div>
       <div>
         <h2 className="text-2xl font-bold text-secondary-900">Emergency Contacts</h2>
         <p className="text-secondary-600 mt-1">Add emergency contact information</p>

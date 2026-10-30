@@ -6,12 +6,13 @@ import type { ContractDetails, ProbationDetails } from '../../types';
 interface ContractProbationProps {
   contract?: Partial<ContractDetails>;
   probation?: Partial<ProbationDetails>;
+  employee?: { fullName?: string; firstName?: string; lastName?: string };
   onNext: (data: { contract: Partial<ContractDetails>; probation: Partial<ProbationDetails> }) => void;
   onPrev: () => void;
   onSave?: () => Promise<void>;
 }
 
-export const ContractProbation = ({ contract, probation, onNext, onPrev, onSave }: ContractProbationProps) => {
+export const ContractProbation = ({ contract, probation, employee, onNext, onPrev, onSave }: ContractProbationProps) => {
   const [isSaving, setIsSaving] = useState(false);
   // Helper to safely convert date to ISO string for input
   const dateToInput = (date: Date | string | undefined): string => {
@@ -93,6 +94,13 @@ export const ContractProbation = ({ contract, probation, onNext, onPrev, onSave 
 
   return (
     <div className="space-y-6">
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold text-gray-900">
+          {employee?.fullName || employee?.firstName && employee?.lastName 
+            ? `${employee.firstName} ${employee.lastName}`
+            : 'Employee Details'}
+        </h2>
+      </div>
       <div>
         <h2 className="text-2xl font-bold text-secondary-900">Contract & Probation Details</h2>
         <p className="text-secondary-600 mt-1">Manage employment contract and probation information</p>

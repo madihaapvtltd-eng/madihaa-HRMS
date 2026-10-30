@@ -196,6 +196,20 @@ export const getEmployeeById = async (id: string) => {
   }
 };
 
+// Get employee by name (slugified)
+export const getEmployeeByName = async (name: string) => {
+  try {
+    const employees = await getEmployees();
+    const employee = employees.find(emp => 
+      emp.fullName.toLowerCase().replace(/\s+/g, '-') === name.toLowerCase()
+    );
+    return employee || null;
+  } catch (error) {
+    console.error('Error fetching employee by name:', error);
+    return null;
+  }
+};
+
 // Create employee
 export const createEmployee = async (employee: Partial<Employee>) => {
   try {

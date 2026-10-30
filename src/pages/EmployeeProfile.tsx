@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { EmployeeFormWizard } from '../components/EmployeeForm';
-import { createEmployee, updateEmployee, getEmployeeById } from '../lib/employees';
+import { createEmployee, updateEmployee, getEmployeeByName } from '../lib/employees';
 import { updateBed, createAssignment } from '../lib/accommodation';
 import type { Employee } from '../types';
 
@@ -11,7 +11,7 @@ interface EmployeeProfilePageProps {
 
 export const EmployeeProfilePage = ({ isEditing = false }: EmployeeProfilePageProps) => {
   const navigate = useNavigate();
-  const { id } = useParams<{ id: string }>();
+  const { name } = useParams<{ name: string }>();
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [loading, setLoading] = useState(isEditing);
   const [error, setError] = useState<string | null>(null);
@@ -22,15 +22,15 @@ export const EmployeeProfilePage = ({ isEditing = false }: EmployeeProfilePagePr
     }
 
     const loadEmployee = async () => {
-      if (!id) {
-        setError('No employee ID provided.');
+      if (!name) {
+        setError('No employee name provided.');
         setLoading(false);
         return;
       }
 
       try {
         setLoading(true);
-        const fetchedEmployee = await getEmployeeById(id);
+        const fetchedEmployee = await getEmployeeByName(name);
         if (!fetchedEmployee) {
           setError('Employee not found.');
         } else {
@@ -45,7 +45,7 @@ export const EmployeeProfilePage = ({ isEditing = false }: EmployeeProfilePagePr
     };
 
     loadEmployee();
-  }, [id, isEditing]);
+  }, [name, isEditing]);
 
   const handleSave = async (employeeData: Partial<Employee>) => {
     try {

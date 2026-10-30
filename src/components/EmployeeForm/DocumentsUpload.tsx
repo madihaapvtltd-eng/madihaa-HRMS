@@ -5,13 +5,14 @@ import type { DocumentType, EmployeeDocument } from '../../types';
 
 interface DocumentsUploadProps {
   documents?: EmployeeDocument[];
+  employee?: { fullName?: string; firstName?: string; lastName?: string };
   onNext: (data: EmployeeDocument[]) => void;
   onPrev: () => void;
   onSubmit: (isComplete: boolean) => void;
   onSave?: () => Promise<void>;
 }
 
-export const DocumentsUpload = ({ documents = [], onNext, onPrev, onSubmit, onSave }: DocumentsUploadProps) => {
+export const DocumentsUpload = ({ documents = [], employee, onNext, onPrev, onSubmit, onSave }: DocumentsUploadProps) => {
   const [isSaving, setIsSaving] = useState(false);
   const [docs, setDocs] = useState<EmployeeDocument[]>(documents);
   const [selectedType, setSelectedType] = useState<string>('certificate');
@@ -76,6 +77,13 @@ export const DocumentsUpload = ({ documents = [], onNext, onPrev, onSubmit, onSa
 
   return (
     <div className="space-y-6">
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold text-gray-900">
+          {employee?.fullName || employee?.firstName && employee?.lastName 
+            ? `${employee.firstName} ${employee.lastName}`
+            : 'Employee Details'}
+        </h2>
+      </div>
       <div>
         <h2 className="text-2xl font-bold text-secondary-900">Documents Upload</h2>
         <p className="text-secondary-600 mt-1">Upload employee documents and certificates</p>

@@ -40,7 +40,7 @@ function App() {
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="employees" element={<Employees />} />
             <Route path="employees/new" element={<EmployeeProfilePage />} />
-            <Route path="employees/:id" element={<EmployeeProfilePage isEditing={true} />} />
+            <Route path="employees/:name" element={<EmployeeProfilePage isEditing={true} />} />
             <Route path="personnel-files" element={<DigitalPersonnelFiles />} />
             <Route path="attendance" element={<Attendance />} />
             <Route path="leave" element={<Leave />} />

@@ -6,13 +6,14 @@ import type { EmployeeAccommodation } from '../../types';
 
 interface AccommodationSelectionProps {
   accommodation?: EmployeeAccommodation;
+  employee?: { fullName?: string; firstName?: string; lastName?: string };
   onNext: (accommodation: EmployeeAccommodation | undefined) => void;
   onPrev?: () => void;
   onCancel: () => void;
   onSave?: () => void;
 }
 
-export const AccommodationSelection = ({ accommodation, onNext, onPrev, onCancel, onSave }: AccommodationSelectionProps) => {
+export const AccommodationSelection = ({ accommodation, employee, onNext, onPrev, onCancel, onSave }: AccommodationSelectionProps) => {
   const [accommodations, setAccommodations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedAccommodation, setSelectedAccommodation] = useState<string | undefined>(accommodation?.accommodationId);
@@ -106,6 +107,13 @@ export const AccommodationSelection = ({ accommodation, onNext, onPrev, onCancel
 
   return (
     <div className="space-y-6">
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold text-gray-900">
+          {employee?.fullName || employee?.firstName && employee?.lastName 
+            ? `${employee.firstName} ${employee.lastName}`
+            : 'Employee Details'}
+        </h2>
+      </div>
       <div className="flex items-center gap-3">
         <Building2 className="w-8 h-8 text-primary-600" />
         <div>

@@ -46,6 +46,13 @@ export const SalaryAllowances = ({ employee, onNext, onPrev, onCancel, onSave }:
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold text-gray-900">
+          {employee?.fullName || employee?.firstName && employee?.lastName 
+            ? `${employee.firstName} ${employee.lastName}`
+            : 'Employee Details'}
+        </h2>
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-secondary-700 mb-1">

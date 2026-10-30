@@ -56,6 +56,13 @@ export const StaffEquipment = ({ employee, onNext, onPrev, onCancel, onSave }: S
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold text-gray-900">
+          {employee?.fullName || employee?.firstName && employee?.lastName 
+            ? `${employee.firstName} ${employee.lastName}`
+            : 'Employee Details'}
+        </h2>
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Uniform */}
         <div className="p-4 bg-secondary-50 rounded-lg">

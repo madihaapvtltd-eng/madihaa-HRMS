@@ -1,0 +1,145 @@
+const admin = require('firebase-admin');
+const fs = require('fs');
+
+// Initialize Firebase Admin
+const serviceAccount = require('./madihaa-hrms-v2-firebase-adminsdk-fbsvc-8c88c15292.json');
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
+
+const db = admin.firestore();
+
+// Read the January leave data
+const januaryLeaves = JSON.parse(fs.readFileSync('past_leaves/january_past_leaves.json', 'utf8'));
+
+// Import to Firebase as leave requests
+async function importLeaves() {
+  let successCount = 0;
+  let errorCount = 0;
+  
+  for (const emp of januaryLeaves) {
+    const employeeNumber = emp.employee_number;
+    const employeeName = emp.name;
+    
+    // Group leaves by date ranges (consecutive days)
+    const leaves = emp.leaves;
+    if (!leaves || leaves.length === 0) continue;
+    
+    // Sort leaves by date
+    leaves.sort((a, b) => new Date(a.date) - new Date(b.date));
+    
+    // Group consecutive days with same leave type
+    let currentGroup = null;
+    const leaveGroups = [];
+    
+    for (const leave of leaves) {
+      const leaveDate = new Date(leave.date);
+      const leaveType = leave.leave_type;
+      
+      // Map leave types to system types
+      let mappedType = 'annual';
+      if (leaveType === 'SICK') {
+        mappedType = 'medical';
+      } else if (leaveType === 'EL') {
+        mappedType = 'emergency';
+      } else if (leaveType === 'AL') {
+        mappedType = 'annual';
+      } else if (leaveType === 'SP') {
+        mappedType = 'unpaid';
+      } else if (leaveType === 'FL') {
+        mappedType = 'unpaid';
+      } else if (leaveType === 'OFF') {
+        mappedType = 'off_day';
+      }
+      
+      if (!currentGroup) {
+        currentGroup = {
+          startDate: leaveDate,
+          endDate: leaveDate,
+          type: mappedType,
+          days: 1
+        };
+      } else {
+        // Check if consecutive day and same type
+        const prevDate = new Date(currentGroup.endDate);
+        prevDate.setDate(prevDate.getDate() + 1);
+        
+        if (prevDate.getTime() === leaveDate.getTime() && currentGroup.type === mappedType) {
+          currentGroup.endDate = leaveDate;
+          currentGroup.days++;
+        } else {
+          leaveGroups.push(currentGroup);
+          currentGroup = {
+            startDate: leaveDate,
+            endDate: leaveDate,
+            type: mappedType,
+            days: 1
+          };
+        }
+      }
+    }
+    
+    if (currentGroup) {
+      leaveGroups.push(currentGroup);
+    }
+    
+    // Create leave requests for each group
+    for (const group of leaveGroups) {
+      try {
+        // Find employee by employeeId in Firestore
+        const employeesSnapshot = await db.collection('employees')
+          .where('employeeId', '==', employeeNumber)
+          .get();
+        
+        if (employeesSnapshot.empty) {
+          console.log(`Employee ${employeeNumber} (${employeeName}) not found in Firestore`);
+          errorCount++;
+          continue;
+        }
+        
+        const employeeDoc = employeesSnapshot.docs[0];
+        const employeeId = employeeDoc.id;
+        
+        // Create leave request
+        const leaveRequest = {
+          employeeId: employeeId,
+          type: group.type,
+          startDate: admin.firestore.Timestamp.fromDate(group.startDate),
+          endDate: admin.firestore.Timestamp.fromDate(group.endDate),
+          days: group.days,
+          reason: `Imported from January 2026 leave data (${group.type})`,
+          status: 'approved',
+          appliedDate: admin.firestore.Timestamp.fromDate(new Date('2026-01-01')),
+          approvals: [{
+            level: 1,
+            approverId: 'system',
+            approverName: 'System Import',
+            status: 'approved',
+            actionDate: admin.firestore.Timestamp.fromDate(new Date('2026-01-01')),
+            comments: 'Auto-imported from historical data'
+          }],
+          balanceAdjusted: true,
+          attachments: []
+        };
+        
+        await db.collection('leave_requests').add(leaveRequest);
+        console.log(`Imported leave for ${employeeName} (${group.type}, ${group.days} days)`);
+        successCount++;
+      } catch (error) {
+        console.error(`Error importing leave for ${employeeName}:`, error.message);
+        errorCount++;
+      }
+    }
+  }
+  
+  console.log(`\nImport complete: ${successCount} successful, ${errorCount} errors`);
+}
+
+importLeaves().then(() => {
+  console.log('Done');
+  process.exit(0);
+}).catch(error => {
+  console.error('Error:', error);
+  process.exit(1);
+});

@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
+import { User, DollarSign, Backpack, Building2, Calendar } from 'lucide-react';
 import { PersonalInfo } from './PersonalInfo';
 import { SalaryAllowances } from './SalaryAllowances';
 import { StaffEquipment } from './StaffEquipment';
 import { AccommodationSelection } from './AccommodationSelection';
+import { LeaveHistory } from './LeaveHistory';
 import type { Employee, EmployeeAccommodation } from '../../types';
 
 interface EmployeeFormWizardProps {
@@ -55,10 +57,11 @@ export const EmployeeFormWizard = ({ employee, onSave, onCancel, isEditing }: Em
   }, [employee]);
 
   const steps = [
-    { title: 'Personal Information', icon: '👤' },
-    { title: 'Salary & Allowances', icon: '💰' },
-    { title: 'Equipment & Items', icon: '🎒' },
-    { title: 'Accommodation', icon: '🏠' },
+    { title: 'Personal Information', icon: <User className="w-5 h-5" /> },
+    { title: 'Salary & Allowances', icon: <DollarSign className="w-5 h-5" /> },
+    { title: 'Equipment & Items', icon: <Backpack className="w-5 h-5" /> },
+    { title: 'Accommodation', icon: <Building2 className="w-5 h-5" /> },
+    { title: 'Leave History', icon: <Calendar className="w-5 h-5" /> },
   ];
 
   const handlePersonalInfoNext = (data: Partial<Employee>) => {
@@ -158,10 +161,18 @@ export const EmployeeFormWizard = ({ employee, onSave, onCancel, isEditing }: Em
         return (
           <AccommodationSelection
             accommodation={formData.accommodation}
+            employee={formData}
             onNext={handleAccommodationNext}
             onPrev={() => setCurrentStep(2)}
             onCancel={onCancel}
             onSave={handleSaveCurrent}
+          />
+        );
+      case 4:
+        return (
+          <LeaveHistory
+            employee={employee}
+            onPrev={() => setCurrentStep(3)}
           />
         );
       default:
@@ -174,7 +185,7 @@ export const EmployeeFormWizard = ({ employee, onSave, onCancel, isEditing }: Em
       {/* Progress Bar */}
       <div className="space-y-2">
         <div className="flex justify-between items-center mb-2">
-          <h1 className="text-2xl font-bold text-secondary-900">
+          <h1 className="text-2xl font-bold text-secondary-900 flex items-center gap-2">
             {steps[currentStep].icon} {steps[currentStep].title}
           </h1>
           <p className="text-sm text-secondary-600">
@@ -204,7 +215,7 @@ export const EmployeeFormWizard = ({ employee, onSave, onCancel, isEditing }: Em
                 : 'bg-secondary-200 text-secondary-600 cursor-not-allowed'
             }`}
           >
-            <span>{step.icon}</span>
+            {step.icon}
             <span className="text-sm font-medium">{step.title}</span>
           </button>
         ))}

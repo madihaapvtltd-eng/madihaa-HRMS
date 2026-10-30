@@ -4,6 +4,7 @@ import { Users, Clock, TrendingUp, AlertCircle, Briefcase, Building2, X } from '
 import { Card, CardHeader, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { getEmployees } from '../lib/employees';
+import { getLeaveRequests } from '../lib/leave';
 import { useNavigate } from 'react-router-dom';
 
 export const Dashboard = () => {
@@ -11,6 +12,7 @@ export const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [selectedStat, setSelectedStat] = useState<string | null>(null);
   const [filteredEmployees, setFilteredEmployees] = useState<any[]>([]);
+  const [onLeaveEmployees, setOnLeaveEmployees] = useState<any[]>([]);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -21,6 +23,24 @@ export const Dashboard = () => {
     try {
       const data = await getEmployees();
       setEmployees(data);
+      
+      // Fetch leave requests to determine actual on-leave status
+      const leaveRequests = await getLeaveRequests();
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      // Find employees with approved leave that includes today
+      const currentlyOnLeave = data.filter(employee => {
+        const employeeLeaves = leaveRequests.filter(
+          lr => lr.employeeId === employee.id && 
+          lr.status === 'approved' &&
+          new Date(lr.startDate) <= today &&
+          new Date(lr.endDate) >= today
+        );
+        return employeeLeaves.length > 0;
+      });
+      
+      setOnLeaveEmployees(currentlyOnLeave);
     } catch (error) {
       console.error('Error loading employees:', error);
     } finally {
@@ -31,7 +51,7 @@ export const Dashboard = () => {
   // Calculate statistics
   const totalEmployees = employees.length;
   const activeEmployees = employees.filter(e => e.status === 'active').length;
-  const onLeaveEmployees = employees.filter(e => e.status === 'on_leave').length;
+  const onLeaveCount = onLeaveEmployees.length;
   const resignedEmployees = employees.filter(e => e.status === 'resigned').length;
 
   // Group by position/designation
@@ -52,7 +72,7 @@ export const Dashboard = () => {
   const stats = [
     { name: 'Total Employees', value: totalEmployees.toString(), icon: Users, color: 'bg-blue-500', filter: 'all' },
     { name: 'Active Staff', value: activeEmployees.toString(), icon: Users, color: 'bg-green-500', filter: 'active' },
-    { name: 'On Leave', value: onLeaveEmployees.toString(), icon: Clock, color: 'bg-yellow-500', filter: 'on_leave' },
+    { name: 'On Leave', value: onLeaveCount.toString(), icon: Clock, color: 'bg-yellow-500', filter: 'on_leave' },
     { name: 'Resigned', value: resignedEmployees.toString(), icon: AlertCircle, color: 'bg-red-500', filter: 'resigned' },
   ];
 
@@ -86,7 +106,7 @@ export const Dashboard = () => {
     } else if (stat.filter === 'active') {
       setFilteredEmployees(employees.filter(e => e.status === 'active'));
     } else if (stat.filter === 'on_leave') {
-      setFilteredEmployees(employees.filter(e => e.status === 'on_leave'));
+      setFilteredEmployees(onLeaveEmployees);
     } else if (stat.filter === 'resigned') {
       setFilteredEmployees(employees.filter(e => e.status === 'resigned'));
     } else if (stat.filter === 'position') {

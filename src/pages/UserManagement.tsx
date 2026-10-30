@@ -5,9 +5,12 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Card } from '../components/ui/Card';
 import { createUser, listUsers, updateUser, deleteUser } from '../lib/auth';
+import { usePermissions } from '../hooks/usePermissions';
+import { PERMISSIONS } from '../lib/permissions';
 import type { User, UserRole } from '../types';
 
 export const UserManagement: React.FC = () => {
+  const { can } = usePermissions();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -155,9 +158,11 @@ export const UserManagement: React.FC = () => {
             <h1 className="text-3xl font-bold text-gray-900">User Management</h1>
             <p className="text-gray-600 mt-1">Manage system users and permissions</p>
           </div>
-          <Button onClick={openCreateModal} icon={<Plus className="w-5 h-5" />}>
-            Add User
-          </Button>
+          {can(PERMISSIONS.USERS_CREATE) && (
+            <Button onClick={openCreateModal} icon={<Plus className="w-5 h-5" />}>
+              Add User
+            </Button>
+          )}
         </div>
 
         <Card className="mb-6">
@@ -221,20 +226,24 @@ export const UserManagement: React.FC = () => {
                       </div>
                     </div>
                     <div className="flex justify-end gap-2">
-                      <button
-                        onClick={() => openEditModal(user)}
-                        className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm flex items-center gap-1"
-                      >
-                        <Edit className="w-4 h-4" />
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDeleteUser(user.id)}
-                        className="px-3 py-2 bg-red-600 text-white rounded-lg text-sm flex items-center gap-1"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                        Delete
-                      </button>
+                      {can(PERMISSIONS.USERS_EDIT) && (
+                        <button
+                          onClick={() => openEditModal(user)}
+                          className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm flex items-center gap-1"
+                        >
+                          <Edit className="w-4 h-4" />
+                          Edit
+                        </button>
+                      )}
+                      {can(PERMISSIONS.USERS_DELETE) && (
+                        <button
+                          onClick={() => handleDeleteUser(user.id)}
+                          className="px-3 py-2 bg-red-600 text-white rounded-lg text-sm flex items-center gap-1"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          Delete
+                        </button>
+                      )}
                     </div>
                   </div>
                 </Card>
@@ -278,20 +287,24 @@ export const UserManagement: React.FC = () => {
                         <td className="py-3 px-4 text-gray-600">{user.employeeId || '-'}</td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => openEditModal(user)}
-                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
-                              title="Edit user"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteUser(user.id)}
-                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
-                              title="Delete user"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            {can(PERMISSIONS.USERS_EDIT) && (
+                              <button
+                                onClick={() => openEditModal(user)}
+                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
+                                title="Edit user"
+                              >
+                                <Edit className="w-4 h-4" />
+                              </button>
+                            )}
+                            {can(PERMISSIONS.USERS_DELETE) && (
+                              <button
+                                onClick={() => handleDeleteUser(user.id)}
+                                className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+                                title="Delete user"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>

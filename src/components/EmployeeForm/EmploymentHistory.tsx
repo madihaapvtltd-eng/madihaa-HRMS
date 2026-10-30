@@ -6,12 +6,13 @@ import type { EmploymentRecord } from '../../types';
 
 interface EmploymentHistoryProps {
   records?: EmploymentRecord[];
+  employee?: { fullName?: string; firstName?: string; lastName?: string };
   onNext: (data: EmploymentRecord[]) => void;
   onPrev: () => void;
   onSave?: () => Promise<void>;
 }
 
-export const EmploymentHistory = ({ records = [], onNext, onPrev, onSave }: EmploymentHistoryProps) => {
+export const EmploymentHistory = ({ records = [], employee, onNext, onPrev, onSave }: EmploymentHistoryProps) => {
   const [isSaving, setIsSaving] = useState(false);
   const [historyRecords, setHistoryRecords] = useState<EmploymentRecord[]>(records);
   const [formData, setFormData] = useState<EmploymentRecord>({
@@ -83,6 +84,13 @@ export const EmploymentHistory = ({ records = [], onNext, onPrev, onSave }: Empl
 
   return (
     <div className="space-y-6">
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold text-gray-900">
+          {employee?.fullName || employee?.firstName && employee?.lastName 
+            ? `${employee.firstName} ${employee.lastName}`
+            : 'Employee Details'}
+        </h2>
+      </div>
       <div>
         <h2 className="text-2xl font-bold text-secondary-900">Employment History</h2>
         <p className="text-secondary-600 mt-1">Track employment changes and milestones</p>

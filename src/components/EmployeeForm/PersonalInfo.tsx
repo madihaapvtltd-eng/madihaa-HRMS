@@ -105,6 +105,13 @@ export const PersonalInfo = ({ employee, onNext, onCancel, onSave }: PersonalInf
 
   return (
     <div className="space-y-6">
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold text-gray-900">
+          {employee?.fullName || employee?.firstName && employee?.lastName 
+            ? `${employee.firstName} ${employee.lastName}`
+            : 'Employee Details'}
+        </h2>
+      </div>
       <div>
         <h2 className="text-2xl font-bold text-secondary-900">Personal Information</h2>
         <p className="text-secondary-600 mt-1">Enter employee's basic details</p>

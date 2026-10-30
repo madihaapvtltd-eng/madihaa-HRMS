@@ -8,10 +8,13 @@ import { Card, CardContent } from '../components/ui/Card';
 import { EmployeeCard } from '../components/EmployeeCard';
 import { getEmployees, deleteEmployee } from '../lib/employees';
 import { importEmployeesFromJSON, validateMasterEmployeeJSON, normalizeExistingEmployeeNames, updateEmployeePhotoPaths, removeDuplicateEmployees } from '../lib/importEmployees';
+import { usePermissions } from '../hooks/usePermissions';
+import { PERMISSIONS } from '../lib/permissions';
 import type { Employee } from '../types';
 
 export const Employees = () => {
   const navigate = useNavigate();
+  const { can } = usePermissions();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
@@ -195,14 +198,12 @@ export const Employees = () => {
           <Button onClick={handleNormalizeNames} variant="secondary" className="sm:w-auto w-full">
             Normalize Names
           </Button>
-          <Button onClick={() => setShowImportModal(true)} variant="secondary" className="sm:w-auto w-full">
-            <Upload className="w-5 h-5 mr-2" />
-            Import
-          </Button>
-          <Button onClick={() => navigate('/employees/new')} className="sm:w-auto w-full">
-            <UserPlus className="w-5 h-5 mr-2" />
-            Add Employee
-          </Button>
+          {can(PERMISSIONS.EMPLOYEES_CREATE) && (
+            <Button onClick={() => navigate('/employees/new')} className="sm:w-auto w-full">
+              <UserPlus className="w-5 h-5 mr-2" />
+              Add Employee
+            </Button>
+          )}
         </div>
       </div>
 
@@ -385,7 +386,7 @@ export const Employees = () => {
             >
               <EmployeeCard
                 employee={employee}
-                onClick={() => navigate(`/employees/${employee.id}`)}
+                onClick={() => navigate(`/employees/${employee.fullName.toLowerCase().replace(/\s+/g, '-')}`)}
               />
             </motion.div>
           ))}
@@ -488,23 +489,27 @@ export const Employees = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex items-center justify-end space-x-2">
                         <button 
-                          onClick={() => navigate(`/employees/${employee.id}`)}
+                          onClick={() => navigate(`/employees/${employee.fullName.toLowerCase().replace(/\s+/g, '-')}`)}
                           className="text-primary-600 hover:text-primary-900"
                         >
                           <Eye className="w-5 h-5" />
                         </button>
-                        <button 
-                          onClick={() => navigate(`/employees/${employee.id}`)}
-                          className="text-secondary-600 hover:text-secondary-900"
-                        >
-                          <Edit className="w-5 h-5" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(employee.id)}
-                          className="text-red-600 hover:text-red-900"
-                        >
-                          <Trash2 className="w-5 h-5" />
-                        </button>
+                        {can(PERMISSIONS.EMPLOYEES_EDIT) && (
+                          <button 
+                            onClick={() => navigate(`/employees/${employee.fullName.toLowerCase().replace(/\s+/g, '-')}`)}
+                            className="text-secondary-600 hover:text-secondary-900"
+                          >
+                            <Edit className="w-5 h-5" />
+                          </button>
+                        )}
+                        {can(PERMISSIONS.EMPLOYEES_DELETE) && (
+                          <button
+                            onClick={() => handleDelete(employee.id)}
+                            className="text-red-600 hover:text-red-900"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </motion.tr>

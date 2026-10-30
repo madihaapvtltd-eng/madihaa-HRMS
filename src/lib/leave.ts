@@ -5,6 +5,7 @@ import {
   getDocs,
   addDoc,
   updateDoc,
+  deleteDoc,
   query,
   where,
   orderBy,
@@ -41,6 +42,7 @@ const removeUndefined = (obj: any): any => {
 };
 
 // Leave Request functions
+// Exported functions for leave management
 export const getLeaveRequests = async (employeeId?: string) => {
   try {
     let q;
@@ -296,6 +298,25 @@ export const cancelLeaveRequest = async (id: string) => {
     await updateLeaveRequest(id, { status: 'cancelled' });
   } catch (error) {
     console.error('Error cancelling leave request:', error);
+    throw error;
+  }
+};
+
+export const deleteLeaveRequest = async (id: string) => {
+  try {
+    await deleteDoc(doc(db, LEAVE_REQUESTS_COLLECTION, id));
+  } catch (error) {
+    console.error('Error deleting leave request:', error);
+    throw error;
+  }
+};
+
+export const bulkDeleteLeaveRequests = async (ids: string[]) => {
+  try {
+    const deletePromises = ids.map(id => deleteDoc(doc(db, LEAVE_REQUESTS_COLLECTION, id)));
+    await Promise.all(deletePromises);
+  } catch (error) {
+    console.error('Error bulk deleting leave requests:', error);
     throw error;
   }
 };

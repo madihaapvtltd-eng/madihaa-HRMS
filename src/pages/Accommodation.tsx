@@ -24,12 +24,15 @@ import {
   createAssignment,
   deleteAssignment
 } from '../lib/accommodation';
+import { usePermissions } from '../hooks/usePermissions';
+import { PERMISSIONS } from '../lib/permissions';
 import { collection, doc, deleteDoc, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import type { Accommodation, Bed } from '../types';
+import type { Accommodation as AccommodationType, Bed } from '../types';
 
-export const AccommodationPage = () => {
-  const [accommodations, setAccommodations] = useState<Accommodation[]>([]);
+export const Accommodation = () => {
+  const { can } = usePermissions();
+  const [accommodations, setAccommodations] = useState<AccommodationType[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedFloor, setExpandedFloor] = useState<string | null>(null);
@@ -375,10 +378,12 @@ export const AccommodationPage = () => {
             onChange={(e) => setAccommodationSearch(e.target.value)}
             className="sm:w-64 w-full"
           />
-          <Button onClick={() => openModal('accommodation')} className="sm:w-auto w-full">
-            <Plus className="w-5 h-5 mr-2" />
-            Add
-          </Button>
+          {can(PERMISSIONS.ACCOMMODATION_MANAGE) && (
+            <Button onClick={() => openModal('accommodation')} className="sm:w-auto w-full">
+              <Plus className="w-5 h-5 mr-2" />
+              Add
+            </Button>
+          )}
         </div>
       </div>
 
@@ -451,15 +456,21 @@ export const AccommodationPage = () => {
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
-                  <Button variant="secondary" size="sm" onClick={() => handleDuplicateAccommodation(accommodation.id)}>
-                    <Copy className="w-4 h-4" />
-                  </Button>
-                  <Button variant="secondary" size="sm" onClick={() => openModal('accommodation', accommodation)}>
-                    <Edit className="w-4 h-4" />
-                  </Button>
-                  <Button variant="secondary" size="sm" onClick={() => handleDeleteAccommodation(accommodation.id)}>
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+                  {can(PERMISSIONS.ACCOMMODATION_MANAGE) && (
+                    <Button variant="secondary" size="sm" onClick={() => handleDuplicateAccommodation(accommodation.id)}>
+                      <Copy className="w-4 h-4" />
+                    </Button>
+                  )}
+                  {can(PERMISSIONS.ACCOMMODATION_MANAGE) && (
+                    <Button variant="secondary" size="sm" onClick={() => openModal('accommodation', accommodation)}>
+                      <Edit className="w-4 h-4" />
+                    </Button>
+                  )}
+                  {can(PERMISSIONS.ACCOMMODATION_MANAGE) && (
+                    <Button variant="secondary" size="sm" onClick={() => handleDeleteAccommodation(accommodation.id)}>
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  )}
                 </div>
               </div>
 
@@ -525,10 +536,12 @@ export const AccommodationPage = () => {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-secondary-900">Floors ({accommodation.floors.length})</span>
-                  <Button variant="secondary" size="sm" onClick={() => openModal('floor', accommodation)}>
-                    <Plus className="w-4 h-4 mr-1" />
-                    Add
-                  </Button>
+                  {can(PERMISSIONS.ACCOMMODATION_MANAGE) && (
+                    <Button variant="secondary" size="sm" onClick={() => openModal('floor', accommodation)}>
+                      <Plus className="w-4 h-4 mr-1" />
+                      Add
+                    </Button>
+                  )}
                 </div>
                 {accommodation.floors.length === 0 ? (
                   <p className="text-sm text-secondary-600 text-center py-2">No floors added yet</p>
@@ -555,15 +568,21 @@ export const AccommodationPage = () => {
                             </span>
                           </div>
                           <div className="flex items-center gap-1">
-                            <Button variant="secondary" size="sm" onClick={() => handleDuplicateFloor(accommodation.id, floor.id)}>
-                              <Copy className="w-3 h-3" />
-                            </Button>
-                            <Button variant="secondary" size="sm" onClick={() => openModal('floor', { ...floor, accommodationId: accommodation.id })}>
-                              <Edit className="w-3 h-3" />
-                            </Button>
-                            <Button variant="secondary" size="sm" onClick={() => handleDeleteFloor(floor.id)}>
-                              <Trash2 className="w-3 h-3" />
-                            </Button>
+                            {can(PERMISSIONS.ACCOMMODATION_MANAGE) && (
+                              <Button variant="secondary" size="sm" onClick={() => handleDuplicateFloor(accommodation.id, floor.id)}>
+                                <Copy className="w-3 h-3" />
+                              </Button>
+                            )}
+                            {can(PERMISSIONS.ACCOMMODATION_MANAGE) && (
+                              <Button variant="secondary" size="sm" onClick={() => openModal('floor', { ...floor, accommodationId: accommodation.id })}>
+                                <Edit className="w-3 h-3" />
+                              </Button>
+                            )}
+                            {can(PERMISSIONS.ACCOMMODATION_MANAGE) && (
+                              <Button variant="secondary" size="sm" onClick={() => handleDeleteFloor(floor.id)}>
+                                <Trash2 className="w-3 h-3" />
+                              </Button>
+                            )}
                           </div>
                         </div>
 
@@ -572,10 +591,12 @@ export const AccommodationPage = () => {
                           <div className="space-y-2 ml-6 mt-2">
                             <div className="flex items-center justify-between">
                               <span className="text-xs text-secondary-600">Rooms</span>
-                              <Button variant="secondary" size="sm" onClick={() => openModal('room', floor)}>
-                                <Plus className="w-3 h-3 mr-1" />
-                                Add
-                              </Button>
+                              {can(PERMISSIONS.ACCOMMODATION_MANAGE) && (
+                                <Button variant="secondary" size="sm" onClick={() => openModal('room', floor)}>
+                                  <Plus className="w-3 h-3 mr-1" />
+                                  Add
+                                </Button>
+                              )}
                             </div>
                             {floor.rooms.length === 0 ? (
                               <p className="text-xs text-secondary-600 text-center py-1">No rooms</p>
@@ -586,15 +607,21 @@ export const AccommodationPage = () => {
                                     <div className="flex items-center justify-between mb-2">
                                       <span className="text-xs font-medium text-secondary-900">Room {room.roomNumber}</span>
                                       <div className="flex items-center gap-1">
-                                        <Button variant="secondary" size="sm" onClick={() => handleDuplicateRoom(floor.id, room.id)}>
-                                          <Copy className="w-3 h-3" />
-                                        </Button>
-                                        <Button variant="secondary" size="sm" onClick={() => openModal('room', { ...room, floorId: floor.id })}>
-                                          <Edit className="w-3 h-3" />
-                                        </Button>
-                                        <Button variant="secondary" size="sm" onClick={() => handleDeleteRoom(room.id)}>
-                                          <Trash2 className="w-3 h-3" />
-                                        </Button>
+                                        {can(PERMISSIONS.ACCOMMODATION_MANAGE) && (
+                                          <Button variant="secondary" size="sm" onClick={() => handleDuplicateRoom(floor.id, room.id)}>
+                                            <Copy className="w-3 h-3" />
+                                          </Button>
+                                        )}
+                                        {can(PERMISSIONS.ACCOMMODATION_MANAGE) && (
+                                          <Button variant="secondary" size="sm" onClick={() => openModal('room', { ...room, floorId: floor.id })}>
+                                            <Edit className="w-3 h-3" />
+                                          </Button>
+                                        )}
+                                        {can(PERMISSIONS.ACCOMMODATION_MANAGE) && (
+                                          <Button variant="secondary" size="sm" onClick={() => handleDeleteRoom(room.id)}>
+                                            <Trash2 className="w-3 h-3" />
+                                          </Button>
+                                        )}
                                       </div>
                                     </div>
 
@@ -602,10 +629,12 @@ export const AccommodationPage = () => {
                                     <div className="space-y-1 ml-4">
                                       <div className="flex items-center justify-between">
                                         <span className="text-xs text-secondary-600">Beds ({room.beds.length})</span>
-                                        <Button variant="secondary" size="sm" onClick={() => openModal('bed', room)}>
-                                          <Plus className="w-3 h-3 mr-1" />
-                                          Add
-                                        </Button>
+                                        {can(PERMISSIONS.ACCOMMODATION_MANAGE) && (
+                                          <Button variant="secondary" size="sm" onClick={() => openModal('bed', room)}>
+                                            <Plus className="w-3 h-3 mr-1" />
+                                            Add
+                                          </Button>
+                                        )}
                                       </div>
                                       {room.beds.length === 0 ? (
                                         <p className="text-xs text-secondary-600 text-center py-1">No beds</p>
@@ -626,20 +655,28 @@ export const AccommodationPage = () => {
                                                 )}
                                               </div>
                                               <div className="flex items-center gap-1">
-                                                <Button variant="secondary" size="sm" onClick={() => openModal('bed', { ...bed, roomId: room.id })}>
-                                                  <Edit className="w-3 h-3" />
-                                                </Button>
-                                                <Button variant="secondary" size="sm" onClick={() => handleDeleteBed(bed.id)}>
-                                                  <Trash2 className="w-3 h-3" />
-                                                </Button>
-                                                {bed.assignedEmployeeId ? (
-                                                  <Button variant="secondary" size="sm" onClick={() => handleUnassignEmployee(bed)}>
-                                                    <User className="w-3 h-3" />
+                                                {can(PERMISSIONS.ACCOMMODATION_MANAGE) && (
+                                                  <Button variant="secondary" size="sm" onClick={() => openModal('bed', { ...bed, roomId: room.id })}>
+                                                    <Edit className="w-3 h-3" />
                                                   </Button>
-                                                ) : (
-                                                  <Button variant="secondary" size="sm" onClick={() => openModal('assign', { ...bed, accommodationId: accommodation.id, floorId: floor.id, roomId: room.id })}>
-                                                    <User className="w-3 h-3" />
+                                                )}
+                                                {can(PERMISSIONS.ACCOMMODATION_MANAGE) && (
+                                                  <Button variant="secondary" size="sm" onClick={() => handleDeleteBed(bed.id)}>
+                                                    <Trash2 className="w-3 h-3" />
                                                   </Button>
+                                                )}
+                                                {can(PERMISSIONS.ACCOMMODATION_MANAGE) && (
+                                                  <>
+                                                    {bed.assignedEmployeeId ? (
+                                                      <Button variant="secondary" size="sm" onClick={() => handleUnassignEmployee(bed)}>
+                                                        <User className="w-3 h-3" />
+                                                      </Button>
+                                                    ) : (
+                                                      <Button variant="secondary" size="sm" onClick={() => openModal('assign', { ...bed, accommodationId: accommodation.id, floorId: floor.id, roomId: room.id })}>
+                                                        <User className="w-3 h-3" />
+                                                      </Button>
+                                                    )}
+                                                  </>
                                                 )}
                                               </div>
                                             </div>

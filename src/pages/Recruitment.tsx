@@ -20,9 +20,12 @@ import {
   completeOnboardingTask,
   getRecruitmentReportSummary,
 } from '../lib/recruitment';
+import { usePermissions } from '../hooks/usePermissions';
+import { PERMISSIONS } from '../lib/permissions';
 import type { JobRequisition, Vacancy, CandidateApplication, InterviewSchedule, Offer, OnboardingTask, RecruitmentReportSummary } from '../types';
 
 export const Recruitment = () => {
+  const { can } = usePermissions();
   const [requisitions, setRequisitions] = useState<JobRequisition[]>([]);
   const [vacancies, setVacancies] = useState<Vacancy[]>([]);
   const [applications, setApplications] = useState<CandidateApplication[]>([]);
@@ -310,10 +313,12 @@ export const Recruitment = () => {
               />
             </div>
             <div className="flex items-end">
-              <Button onClick={handleCreateRequisition} loading={creating} className="w-full">
-                <Plus className="w-5 h-5 mr-2" />
-                Create Requisition
-              </Button>
+              {can(PERMISSIONS.RECRUITMENT_MANAGE) && (
+                <Button onClick={handleCreateRequisition} loading={creating} className="w-full">
+                  <Plus className="w-5 h-5 mr-2" />
+                  Create Requisition
+                </Button>
+              )}
             </div>
           </div>
           <div className="mt-4">
@@ -365,12 +370,12 @@ export const Recruitment = () => {
                   </div>
                 </div>
                 <div className="flex justify-end">
-                  {req.status === 'draft' && (
+                  {can(PERMISSIONS.RECRUITMENT_MANAGE) && req.status === 'draft' && (
                     <Button variant="secondary" size="sm" onClick={() => handleSubmitRequisition(req.id)} disabled={actionLoading}>
                       Submit
                     </Button>
                   )}
-                  {req.status === 'submitted' && (
+                  {can(PERMISSIONS.RECRUITMENT_APPROVE) && req.status === 'submitted' && (
                     <Button variant="primary" size="sm" onClick={() => handleApproveRequisition(req.id)} disabled={actionLoading}>
                       Approve
                     </Button>
@@ -410,12 +415,12 @@ export const Recruitment = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-secondary-900">{req.status}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary-600">{new Date(req.createdAt).toLocaleDateString()}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary-900 space-x-2">
-                      {req.status === 'draft' && (
+                      {can(PERMISSIONS.RECRUITMENT_MANAGE) && req.status === 'draft' && (
                         <Button variant="secondary" size="sm" onClick={() => handleSubmitRequisition(req.id)} disabled={actionLoading}>
                           Submit
                         </Button>
                       )}
-                      {req.status === 'submitted' && (
+                      {can(PERMISSIONS.RECRUITMENT_APPROVE) && req.status === 'submitted' && (
                         <Button variant="primary" size="sm" onClick={() => handleApproveRequisition(req.id)} disabled={actionLoading}>
                           Approve
                         </Button>

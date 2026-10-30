@@ -17,7 +17,7 @@ import { Training } from './pages/Training';
 import { Performance } from './pages/Performance';
 import { Lifecycle } from './pages/Lifecycle';
 import { UserManagement } from './pages/UserManagement';
-import { AccommodationPage } from './pages/Accommodation';
+import { Accommodation } from './pages/Accommodation';
 import { WorkLocationPage } from './pages/WorkLocation';
 import { OrganizationChart } from './pages/OrganizationChart';
 import { FridayDuty } from './pages/FridayDuty';
@@ -51,7 +51,7 @@ function App() {
             <Route path="training" element={<Training />} />
             <Route path="performance" element={<Performance />} />
             <Route path="lifecycle" element={<Lifecycle />} />
-            <Route path="accommodation" element={<AccommodationPage />} />
+            <Route path="accommodation" element={<Accommodation />} />
             <Route path="work-locations" element={<WorkLocationPage />} />
             <Route path="organization-chart" element={<OrganizationChart />} />
             <Route path="friday-duty" element={<FridayDuty />} />

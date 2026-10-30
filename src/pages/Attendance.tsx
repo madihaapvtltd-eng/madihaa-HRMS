@@ -6,12 +6,15 @@ import { getAttendanceStats, getTodayAttendanceForEmployee, checkIn, checkOut, r
 import { useAuth } from '../contexts/AuthContext';
 import { getEmployees } from '../lib/employees';
 import { getAllWorkLocations } from '../lib/workLocation';
+import { usePermissions } from '../hooks/usePermissions';
+import { PERMISSIONS } from '../lib/permissions';
 import { addDoc, collection, query, where, getDocs, updateDoc, doc, Timestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import * as XLSX from 'xlsx';
 
 export const Attendance = () => {
   const { user } = useAuth();
+  const { can } = usePermissions();
   const [todayStats, setTodayStats] = useState({
     total: 0,
     present: 0,
@@ -464,26 +467,30 @@ export const Attendance = () => {
               </p>
             </div>
             <div className="flex gap-3 items-center">
-              {!isCheckedIn ? (
-                <Button
-                  onClick={handleCheckIn}
-                  loading={loading}
-                  className="bg-white text-primary-600 hover:bg-primary-50"
-                  size="lg"
-                >
-                  <ArrowRight className="w-5 h-5 mr-2" />
-                  Check In
-                </Button>
-              ) : (
-                <Button
-                  onClick={handleCheckOut}
-                  loading={loading}
-                  className="bg-white text-primary-600 hover:bg-primary-50"
-                  size="lg"
-                >
-                  <ArrowLeft className="w-5 h-5 mr-2" />
-                  Check Out
-                </Button>
+              {can(PERMISSIONS.ATTENDANCE_EDIT) && (
+                <>
+                  {!isCheckedIn ? (
+                    <Button
+                      onClick={handleCheckIn}
+                      loading={loading}
+                      className="bg-white text-primary-600 hover:bg-primary-50"
+                      size="lg"
+                    >
+                      <ArrowRight className="w-5 h-5 mr-2" />
+                      Check In
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={handleCheckOut}
+                      loading={loading}
+                      className="bg-white text-primary-600 hover:bg-primary-50"
+                      size="lg"
+                    >
+                      <ArrowLeft className="w-5 h-5 mr-2" />
+                      Check Out
+                    </Button>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -513,51 +520,53 @@ export const Attendance = () => {
               </Card>
             </div>
           )}
-          <Card className="mt-4">
-            <CardHeader>
-              <h2 className="text-lg font-semibold text-secondary-900">Attendance Adjustment Request</h2>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-secondary-700 mb-1">Requested Check-in</label>
-                  <input
-                    type="time"
-                    value={adjustmentCheckIn}
-                    onChange={(e) => setAdjustmentCheckIn(e.target.value)}
-                    className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  />
+          {can(PERMISSIONS.ATTENDANCE_ADJUST) && (
+            <Card className="mt-4">
+              <CardHeader>
+                <h2 className="text-lg font-semibold text-secondary-900">Attendance Adjustment Request</h2>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-secondary-700 mb-1">Requested Check-in</label>
+                    <input
+                      type="time"
+                      value={adjustmentCheckIn}
+                      onChange={(e) => setAdjustmentCheckIn(e.target.value)}
+                      className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-secondary-700 mb-1">Requested Check-out</label>
+                    <input
+                      type="time"
+                      value={adjustmentCheckOut}
+                      onChange={(e) => setAdjustmentCheckOut(e.target.value)}
+                      className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-secondary-700 mb-1">Reason</label>
+                    <input
+                      type="text"
+                      value={adjustmentReason}
+                      onChange={(e) => setAdjustmentReason(e.target.value)}
+                      placeholder="Enter adjustment reason"
+                      className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-secondary-700 mb-1">Requested Check-out</label>
-                  <input
-                    type="time"
-                    value={adjustmentCheckOut}
-                    onChange={(e) => setAdjustmentCheckOut(e.target.value)}
-                    className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  />
+                {adjustmentSuccess && (
+                  <div className="mt-4 text-sm text-green-600">{adjustmentSuccess}</div>
+                )}
+                <div className="mt-4">
+                  <Button onClick={submitAdjustmentRequest} loading={adjustmentSubmitting}>
+                    Submit Attendance Adjustment
+                  </Button>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-secondary-700 mb-1">Reason</label>
-                  <input
-                    type="text"
-                    value={adjustmentReason}
-                    onChange={(e) => setAdjustmentReason(e.target.value)}
-                    placeholder="Enter adjustment reason"
-                    className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  />
-                </div>
-              </div>
-              {adjustmentSuccess && (
-                <div className="mt-4 text-sm text-green-600">{adjustmentSuccess}</div>
-              )}
-              <div className="mt-4">
-                <Button onClick={submitAdjustmentRequest} loading={adjustmentSubmitting}>
-                  Submit Attendance Adjustment
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
         </CardContent>
       </Card>
 
@@ -787,17 +796,19 @@ export const Attendance = () => {
                             </div>
                           </div>
                           <div className="flex justify-end space-x-2">
-                            {editingRow === emp.empId ? (
+                            {can(PERMISSIONS.ATTENDANCE_EDIT) && (
                               <>
-                                <button
-                                  onClick={() => handleSaveRow(emp.empId)}
-                                  disabled={saving}
-                                  className="px-3 py-2 bg-green-600 text-white rounded-lg text-sm flex items-center gap-1"
-                                >
-                                  <Save className="w-4 h-4" />
-                                  Save
-                                </button>
-                                <button
+                                {editingRow === emp.empId ? (
+                                  <>
+                                    <button
+                                      onClick={() => handleSaveRow(emp.empId)}
+                                      disabled={saving}
+                                      className="px-3 py-2 bg-green-600 text-white rounded-lg text-sm flex items-center gap-1"
+                                    >
+                                      <Save className="w-4 h-4" />
+                                      Save
+                                    </button>
+                                    <button
                                   onClick={handleCancelEdit}
                                   className="px-3 py-2 bg-secondary-600 text-white rounded-lg text-sm flex items-center gap-1"
                                 >
@@ -813,6 +824,8 @@ export const Attendance = () => {
                                 <Edit2 className="w-4 h-4" />
                                 Edit
                               </button>
+                            )}
+                              </>
                             )}
                           </div>
                         </div>

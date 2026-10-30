@@ -15,6 +15,8 @@ import {
   getTrainingNotifications,
   getTrainingReportSummary,
 } from '../lib/training';
+import { usePermissions } from '../hooks/usePermissions';
+import { PERMISSIONS } from '../lib/permissions';
 import type {
   TrainingNeedsAnalysis,
   TrainingCourse,
@@ -28,6 +30,7 @@ import type {
 } from '../types';
 
 export const Training = () => {
+  const { can } = usePermissions();
   const [needs, setNeeds] = useState<TrainingNeedsAnalysis[]>([]);
   const [courses, setCourses] = useState<TrainingCourse[]>([]);
   const [sessions, setSessions] = useState<TrainingSession[]>([]);
@@ -186,10 +189,12 @@ export const Training = () => {
               />
             </div>
             <div className="flex items-end">
-              <Button onClick={handleCreateNeedsAnalysis} loading={creating} className="w-full">
-                <Plus className="w-5 h-5 mr-2" />
-                Create TNA Plan
-              </Button>
+              {can(PERMISSIONS.TRAINING_MANAGE) && (
+                <Button onClick={handleCreateNeedsAnalysis} loading={creating} className="w-full">
+                  <Plus className="w-5 h-5 mr-2" />
+                  Create TNA Plan
+                </Button>
+              )}
             </div>
           </div>
         </CardContent>

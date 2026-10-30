@@ -4,9 +4,12 @@ import { DollarSign, Calendar, Download, FileText, Send, CheckCircle, Clock, Ale
 import { Button } from '../components/ui/Button';
 import { Card, CardHeader, CardContent } from '../components/ui/Card';
 import { getPayroll, getPayrollSummary } from '../lib/payroll';
+import { usePermissions } from '../hooks/usePermissions';
+import { PERMISSIONS } from '../lib/permissions';
 import type { Payroll as PayrollRecord, PayrollSummary } from '../types';
 
 export const Payroll = () => {
+  const { can } = usePermissions();
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [payrollData, setPayrollData] = useState<PayrollRecord[]>([]);
@@ -57,14 +60,18 @@ export const Payroll = () => {
           <p className="text-secondary-600 mt-1">Manage salary processing and payments</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="secondary">
-            <Download className="w-5 h-5 mr-2" />
-            Export
-          </Button>
-          <Button>
-            <Send className="w-5 h-5 mr-2" />
-            Process Payroll
-          </Button>
+          {can(PERMISSIONS.REPORTS_EXPORT) && (
+            <Button variant="secondary">
+              <Download className="w-5 h-5 mr-2" />
+              Export
+            </Button>
+          )}
+          {can(PERMISSIONS.PAYROLL_PROCESS) && (
+            <Button>
+              <Send className="w-5 h-5 mr-2" />
+              Process Payroll
+            </Button>
+          )}
         </div>
       </div>
 

@@ -10,10 +10,13 @@ import {
   validateOvertimeRequest,
 } from '../lib/overtime';
 import { useAuth } from '../contexts/AuthContext';
+import { usePermissions } from '../hooks/usePermissions';
+import { PERMISSIONS } from '../lib/permissions';
 import type { OvertimeRequest, OvertimeSummary } from '../types';
 
 export const Overtime = () => {
   const { user } = useAuth();
+  const { can } = usePermissions();
   const [overtimeRequests, setOvertimeRequests] = useState<OvertimeRequest[]>([]);
   const [summary, setSummary] = useState<OvertimeSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -135,10 +138,12 @@ export const Overtime = () => {
           <h1 className="text-3xl font-bold text-secondary-900">Overtime Management</h1>
           <p className="text-secondary-600 mt-1">Track and approve overtime requests</p>
         </div>
-        <Button onClick={toggleRequestForm} className="sm:w-auto w-full">
-          <Plus className="w-5 h-5 mr-2" />
-          Request Overtime
-        </Button>
+        {can(PERMISSIONS.OVERTIME_REQUEST) && (
+          <Button onClick={toggleRequestForm} className="sm:w-auto w-full">
+            <Plus className="w-5 h-5 mr-2" />
+            Request Overtime
+          </Button>
+        )}
       </div>
 
       {showRequestForm && (
@@ -447,14 +452,16 @@ export const Overtime = () => {
                       <button className="text-primary-600 hover:text-primary-900">
                         <Eye className="w-5 h-5" />
                       </button>
-                      {request.status === 'pending' && (
+                      {request.status === 'pending' && can(PERMISSIONS.OVERTIME_APPROVE) && (
                         <>
                           <button className="text-green-600 hover:text-green-900">
                             <Check className="w-5 h-5" />
                           </button>
-                          <button className="text-red-600 hover:text-red-900">
-                            <X className="w-5 h-5" />
-                          </button>
+                          {can(PERMISSIONS.OVERTIME_REJECT) && (
+                            <button className="text-red-600 hover:text-red-900">
+                              <X className="w-5 h-5" />
+                            </button>
+                          )}
                         </>
                       )}
                     </div>

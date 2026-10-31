@@ -5,6 +5,7 @@ import {
   getDocs,
   addDoc,
   updateDoc,
+  deleteDoc,
   query,
   where,
   orderBy,
@@ -119,16 +120,19 @@ export const approveOvertimeRequest = async (id: string, approverId: string, app
   try {
     const request = await getOvertimeRequestById(id);
     if (!request) throw new Error('Overtime request not found');
-    
+
     const updatedApprovals = request.approvals || [];
-    updatedApprovals.push({
+    const approval: any = {
       approverId,
       approverName,
       status: 'approved',
-      comments,
       actionDate: new Date(),
-    });
-    
+    };
+    if (comments) {
+      approval.comments = comments;
+    }
+    updatedApprovals.push(approval);
+
     await updateOvertimeRequest(id, {
       approvals: updatedApprovals,
       status: 'approved',
@@ -143,16 +147,19 @@ export const rejectOvertimeRequest = async (id: string, approverId: string, appr
   try {
     const request = await getOvertimeRequestById(id);
     if (!request) throw new Error('Overtime request not found');
-    
+
     const updatedApprovals = request.approvals || [];
-    updatedApprovals.push({
+    const approval: any = {
       approverId,
       approverName,
       status: 'rejected',
-      comments,
       actionDate: new Date(),
-    });
-    
+    };
+    if (comments) {
+      approval.comments = comments;
+    }
+    updatedApprovals.push(approval);
+
     await updateOvertimeRequest(id, {
       approvals: updatedApprovals,
       status: 'rejected',
@@ -168,6 +175,15 @@ export const completeOvertimeRequest = async (id: string) => {
     await updateOvertimeRequest(id, { status: 'completed' });
   } catch (error) {
     console.error('Error completing overtime request:', error);
+    throw error;
+  }
+};
+
+export const deleteOvertimeRequest = async (id: string) => {
+  try {
+    await deleteDoc(doc(db, OVERTIME_COLLECTION, id));
+  } catch (error) {
+    console.error('Error deleting overtime request:', error);
     throw error;
   }
 };
@@ -226,7 +242,7 @@ export const calculateOvertimeRate = (basicSalary: number, hours: number, reques
   return hourlyRate * hours * premium;
 };
 
-export const validateOvertimeRequest = (request: Partial<OvertimeRequest>, submittedDate: Date) => {
+export const validateOvertimeRequest = (request: Partial<OvertimeRequest>) => {
   const errors: string[] = [];
 
   if (!request.date || !(request.date instanceof Date) || isNaN(request.date.getTime())) {
@@ -240,13 +256,6 @@ export const validateOvertimeRequest = (request: Partial<OvertimeRequest>, submi
   }
   if (request.requestType === 'planned' && request.hours && request.hours > 60) {
     errors.push('Planned overtime cannot exceed 60 hours.');
-  }
-  if (request.date && request.date instanceof Date && !isNaN(request.date.getTime())) {
-    const maxBackdate = new Date(request.date);
-    maxBackdate.setDate(maxBackdate.getDate() + 10);
-    if (submittedDate > maxBackdate) {
-      errors.push('Overtime requests can only be backdated up to 10 days.');
-    }
   }
   if (request.requestType === 'emergency' && !request.requiresDivisionHeadApproval) {
     errors.push('Emergency overtime requires Division Head approval.');

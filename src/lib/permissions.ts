@@ -47,6 +47,7 @@ export const PERMISSIONS = {
   OVERTIME_REQUEST: 'overtime.request',
   OVERTIME_APPROVE: 'overtime.approve',
   OVERTIME_REJECT: 'overtime.reject',
+  OVERTIME_DELETE: 'overtime.delete',
   
   // Performance
   PERFORMANCE_VIEW: 'performance.view',

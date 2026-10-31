@@ -8,6 +8,9 @@ import {
   getOvertimeSummary,
   createOvertimeRequest,
   validateOvertimeRequest,
+  approveOvertimeRequest,
+  rejectOvertimeRequest,
+  deleteOvertimeRequest,
 } from '../lib/overtime';
 import { getEmployees } from '../lib/employees';
 import { useAuth } from '../contexts/AuthContext';
@@ -35,6 +38,8 @@ export const Overtime = () => {
   const [newRequestType, setNewRequestType] = useState<'planned' | 'emergency' | 'public_holiday'>('planned');
   const [overtimeErrors, setOvertimeErrors] = useState<string[]>([]);
   const [submittingOvertime, setSubmittingOvertime] = useState(false);
+  const [selectedRequests, setSelectedRequests] = useState<Set<string>>(new Set());
+  const [bulkSubmitting, setBulkSubmitting] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -47,11 +52,8 @@ export const Overtime = () => {
       setOvertimeRequests(requests);
       setEmployees(empData.filter(e => e.status === 'active'));
 
-      const startDate = new Date();
-      startDate.setMonth(startDate.getMonth() - 1);
-      const endDate = new Date();
-
-      const summaryData = await getOvertimeSummary(startDate, endDate, user?.employeeId);
+      const payrollCycle = getPayrollCycleDates();
+      const summaryData = await getOvertimeSummary(payrollCycle.start, payrollCycle.end, hasApprovePermission ? undefined : user?.employeeId);
       setSummary(summaryData);
     } catch (error) {
       console.error('Error loading overtime data:', error);
@@ -64,24 +66,19 @@ export const Overtime = () => {
     loadData();
   }, [loadData]);
 
-  const filteredRequests = overtimeRequests.filter(request => {
-    if (filterStatus === 'all') return true;
-    return request.status === filterStatus;
-  });
-
-  const toggleRequestForm = () => {
-    setShowRequestForm(!showRequestForm);
-    setOvertimeErrors([]);
-  };
-
   // Calculate payroll cycle dates (26th of previous month to 25th of current month)
   const getPayrollCycleDates = () => {
     const now = new Date();
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
 
-    const cycleStart = new Date(currentYear, currentMonth - 1, 26);
-    const cycleEnd = new Date(currentYear, currentMonth, 25);
+    // Previous month 26th - use UTC to avoid timezone issues
+    const cycleStart = new Date(Date.UTC(currentYear, currentMonth - 1, 26, 0, 0, 0, 0));
+
+    // Current month 25th - use UTC to avoid timezone issues
+    const cycleEnd = new Date(Date.UTC(currentYear, currentMonth, 25, 23, 59, 59, 999));
+
+    console.log('Payroll cycle:', cycleStart.toISOString().split('T')[0], 'to', cycleEnd.toISOString().split('T')[0]);
 
     return {
       start: cycleStart,
@@ -93,6 +90,23 @@ export const Overtime = () => {
 
   const payrollCycle = getPayrollCycleDates();
 
+  const filteredRequests = overtimeRequests.filter(request => {
+    const requestDate = new Date(request.date);
+    // Compare using UTC to avoid timezone issues
+    const requestDateUTC = Date.UTC(requestDate.getFullYear(), requestDate.getMonth(), requestDate.getDate());
+    const startUTC = payrollCycle.start.getTime();
+    const endUTC = payrollCycle.end.getTime();
+    const isInPayrollCycle = requestDateUTC >= startUTC && requestDateUTC <= endUTC;
+    if (!isInPayrollCycle) return false;
+    if (filterStatus === 'all') return true;
+    return request.status === filterStatus;
+  });
+
+  const toggleRequestForm = () => {
+    setShowRequestForm(!showRequestForm);
+    setOvertimeErrors([]);
+  };
+
   // Generate all dates in the payroll cycle
   const getPayrollCycleDatesList = () => {
     const dates = [];
@@ -100,8 +114,12 @@ export const Overtime = () => {
     const end = new Date(payrollCycle.end);
 
     while (current <= end) {
-      dates.push(current.toISOString().split('T')[0]);
-      current.setDate(current.getDate() + 1);
+      // Use UTC date to avoid timezone issues
+      const year = current.getUTCFullYear();
+      const month = String(current.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(current.getUTCDate()).padStart(2, '0');
+      dates.push(`${year}-${month}-${day}`);
+      current.setUTCDate(current.getUTCDate() + 1);
     }
 
     return dates;
@@ -139,7 +157,7 @@ export const Overtime = () => {
           requestType: newRequestType,
         };
 
-        const validationErrors = validateOvertimeRequest(request, new Date());
+        const validationErrors = validateOvertimeRequest(request);
         if (validationErrors.length > 0) {
           setOvertimeErrors(validationErrors);
           return;
@@ -187,6 +205,72 @@ export const Overtime = () => {
         purpose: prev[date]?.purpose || ''
       }
     }));
+  };
+
+  const handleBulkApprove = async () => {
+    if (!user?.employeeId || selectedRequests.size === 0) return;
+    setBulkSubmitting(true);
+    try {
+      for (const requestId of selectedRequests) {
+        await approveOvertimeRequest(requestId, user.employeeId, user.email || 'Admin');
+      }
+      setSelectedRequests(new Set());
+      await loadData();
+      alert('Overtime requests approved successfully!');
+    } catch (error) {
+      console.error('Error approving overtime requests:', error);
+      alert('Failed to approve overtime requests. Please try again.');
+    } finally {
+      setBulkSubmitting(false);
+    }
+  };
+
+  const handleBulkReject = async () => {
+    if (!user?.employeeId || selectedRequests.size === 0) return;
+    setBulkSubmitting(true);
+    try {
+      for (const requestId of selectedRequests) {
+        await rejectOvertimeRequest(requestId, user.employeeId, user.email || 'Admin');
+      }
+      setSelectedRequests(new Set());
+      await loadData();
+      alert('Overtime requests rejected successfully!');
+    } catch (error) {
+      console.error('Error rejecting overtime requests:', error);
+      alert('Failed to reject overtime requests. Please try again.');
+    } finally {
+      setBulkSubmitting(false);
+    }
+  };
+
+  const handleSelectAll = () => {
+    const canDelete = can(PERMISSIONS.OVERTIME_DELETE);
+    const requestsToSelect = canDelete ? filteredRequests : filteredRequests.filter(r => r.status === 'pending');
+    if (selectedRequests.size === requestsToSelect.length) {
+      setSelectedRequests(new Set());
+    } else {
+      setSelectedRequests(new Set(requestsToSelect.map(r => r.id)));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (!can(PERMISSIONS.OVERTIME_DELETE) || selectedRequests.size === 0) return;
+    if (!confirm(`Are you sure you want to delete ${selectedRequests.size} overtime request(s)? This action cannot be undone.`)) return;
+
+    setBulkSubmitting(true);
+    try {
+      for (const requestId of selectedRequests) {
+        await deleteOvertimeRequest(requestId);
+      }
+      setSelectedRequests(new Set());
+      await loadData();
+      alert('Overtime requests deleted successfully!');
+    } catch (error) {
+      console.error('Error deleting overtime requests:', error);
+      alert('Failed to delete overtime requests. Please try again.');
+    } finally {
+      setBulkSubmitting(false);
+    }
   };
 
   const applyBulkEdit = () => {
@@ -700,26 +784,51 @@ export const Overtime = () => {
       {/* Filters */}
       <Card>
         <CardContent className="p-4">
-          <div className="flex flex-col sm:flex-row gap-4">
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-4 py-2 border border-secondary-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-            >
-              <option value="all">All Status</option>
-              <option value="pending">Pending</option>
-              <option value="approved">Approved</option>
-              <option value="rejected">Rejected</option>
-              <option value="completed">Completed</option>
-            </select>
-            <Button variant="secondary">
-              <Filter className="w-5 h-5 mr-2" />
-              More Filters
-            </Button>
-            <Button variant="secondary">
-              <Download className="w-5 h-5 mr-2" />
-              Export
-            </Button>
+          <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
+            <div className="flex gap-4">
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="px-4 py-2 border border-secondary-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+              >
+                <option value="all">All Status</option>
+                <option value="pending">Pending</option>
+                <option value="approved">Approved</option>
+                <option value="rejected">Rejected</option>
+                <option value="completed">Completed</option>
+              </select>
+              {can(PERMISSIONS.OVERTIME_APPROVE) && filteredRequests.some(r => r.status === 'pending') && (
+                <div className="flex gap-2">
+                  <Button variant="secondary" onClick={handleSelectAll}>
+                    Select All
+                  </Button>
+                  <Button onClick={handleBulkApprove} loading={bulkSubmitting} disabled={selectedRequests.size === 0}>
+                    <Check className="w-4 h-4 mr-2" />
+                    Approve ({selectedRequests.size})
+                  </Button>
+                  <Button variant="secondary" onClick={handleBulkReject} loading={bulkSubmitting} disabled={selectedRequests.size === 0}>
+                    <X className="w-4 h-4 mr-2" />
+                    Reject ({selectedRequests.size})
+                  </Button>
+                </div>
+              )}
+              {can(PERMISSIONS.OVERTIME_DELETE) && selectedRequests.size > 0 && (
+                <Button variant="danger" onClick={handleBulkDelete} loading={bulkSubmitting}>
+                  <X className="w-4 h-4 mr-2" />
+                  Delete ({selectedRequests.size})
+                </Button>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="secondary">
+                <Filter className="w-5 h-5 mr-2" />
+                More Filters
+              </Button>
+              <Button variant="secondary">
+                <Download className="w-5 h-5 mr-2" />
+                Export
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -779,6 +888,19 @@ export const Overtime = () => {
           <table className="w-full">
             <thead className="bg-secondary-50 border-b border-secondary-200">
               <tr>
+                {(can(PERMISSIONS.OVERTIME_APPROVE) && filteredRequests.some(r => r.status === 'pending')) || can(PERMISSIONS.OVERTIME_DELETE) && (
+                  <th className="px-4 py-3 text-left">
+                    <input
+                      type="checkbox"
+                      checked={selectedRequests.size === (can(PERMISSIONS.OVERTIME_DELETE) ? filteredRequests.length : filteredRequests.filter(r => r.status === 'pending').length) && (can(PERMISSIONS.OVERTIME_DELETE) ? filteredRequests.length : filteredRequests.filter(r => r.status === 'pending').length) > 0}
+                      onChange={handleSelectAll}
+                      className="rounded border-secondary-300 text-primary-600 focus:ring-primary-500"
+                    />
+                  </th>
+                )}
+                <th className="px-6 py-3 text-left text-xs font-medium text-secondary-600 uppercase tracking-wider">
+                  Employee
+                </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-secondary-600 uppercase tracking-wider">
                   Date
                 </th>
@@ -811,6 +933,29 @@ export const Overtime = () => {
                   transition={{ delay: index * 0.05 }}
                   className="hover:bg-secondary-50"
                 >
+                  {(can(PERMISSIONS.OVERTIME_APPROVE) && filteredRequests.some(r => r.status === 'pending')) || can(PERMISSIONS.OVERTIME_DELETE) && (
+                    <td className="px-4 py-4 whitespace-nowrap">
+                      <input
+                        type="checkbox"
+                        checked={selectedRequests.has(request.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedRequests(prev => new Set([...prev, request.id]));
+                          } else {
+                            setSelectedRequests(prev => {
+                              const newSet = new Set(prev);
+                              newSet.delete(request.id);
+                              return newSet;
+                            });
+                          }
+                        }}
+                        className="rounded border-secondary-300 text-primary-600 focus:ring-primary-500"
+                      />
+                    </td>
+                  )}
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary-900">
+                    {employees.find(e => e.id === request.employeeId)?.fullName || request.employeeId}
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <Calendar className="w-4 h-4 text-secondary-400 mr-2" />

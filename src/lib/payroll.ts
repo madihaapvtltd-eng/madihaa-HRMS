@@ -321,6 +321,99 @@ export const generatePayslipData = async (payrollId: string) => {
   }
 };
 
+// Generate payroll from employee salary data
+export const generatePayrollFromEmployees = async (month: number, year: number) => {
+  try {
+    const { getEmployees } = await import('./employees');
+    const { getOvertimeRequests, calculateOvertimeRate } = await import('./overtime');
+    const employees = await getEmployees();
+
+    const activeEmployees = employees.filter(emp => emp.status === 'active');
+
+    const payrollRecords = await Promise.all(activeEmployees.map(async (employee) => {
+      const salary = employee.salaryAllowances || {};
+      const basicSalary = Number(salary.basicSalary || 0);
+      const otAllowance = Number(salary.otAllowances || 0);
+      const otherAllowance = Number(salary.otherAllowances || 0);
+      const attendanceAllowance = Number(salary.attendanceAllowance || 0);
+      const livingAllowance = Number(salary.livingAllowance || 0);
+      const foodAllowance = Number(salary.foodAllowance || 0);
+
+      // Get approved overtime for this employee
+      const overtimeRequests = await getOvertimeRequests(employee.id);
+      const approvedOvertime = overtimeRequests.filter(o =>
+        o.status === 'approved' || o.status === 'completed'
+      );
+
+      // Calculate overtime pay
+      const overtimePay = approvedOvertime.reduce((sum, ot) => {
+        return sum + calculateOvertimeRate(basicSalary, ot.hours, ot.requestType);
+      }, 0);
+
+      const overtimeHours = approvedOvertime.reduce((sum, ot) => sum + ot.hours, 0);
+
+      const allowances = [
+        { id: '1', name: 'OT Allowance', amount: otAllowance, type: 'fixed' as const },
+        { id: '2', name: 'Other Allowance', amount: otherAllowance, type: 'fixed' as const },
+        { id: '3', name: 'Attendance Allowance', amount: attendanceAllowance, type: 'fixed' as const },
+        { id: '4', name: 'Living Allowance', amount: livingAllowance, type: 'fixed' as const },
+        { id: '5', name: 'Food Allowance', amount: foodAllowance, type: 'fixed' as const },
+      ].filter(a => a.amount > 0);
+
+      // Add overtime as allowance if there is any
+      if (overtimePay > 0) {
+        allowances.push({
+          id: 'ot',
+          name: `Overtime (${overtimeHours.toFixed(1)} hrs)`,
+          amount: overtimePay,
+          type: 'fixed' as const
+        });
+      }
+
+      const totalAllowances = allowances.reduce((sum, a) => sum + a.amount, 0);
+      const grossSalary = basicSalary + totalAllowances;
+      const deductions: any[] = [];
+      const totalDeductions = 0;
+      const netSalary = grossSalary - totalDeductions;
+
+      return {
+        employeeId: employee.id,
+        month,
+        year,
+        basicSalary,
+        allowances,
+        deductions,
+        bonuses: [],
+        loans: [],
+        grossSalary,
+        netSalary,
+        status: 'draft' as const,
+        createdAt: new Date(),
+      };
+    }));
+
+    // Batch create payroll records
+    const batch = writeBatch(db);
+    const payrollIds: string[] = [];
+
+    payrollRecords.forEach(payroll => {
+      const docRef = doc(collection(db, PAYROLL_COLLECTION));
+      batch.set(docRef, {
+        ...payroll,
+        createdAt: Timestamp.now(),
+      });
+      payrollIds.push(docRef.id);
+    });
+
+    await batch.commit();
+
+    return payrollIds;
+  } catch (error) {
+    console.error('Error generating payroll from employees:', error);
+    throw error;
+  }
+};
+
 // ADVANCED PAYROLL FEATURES
 
 const PAYROLL_CONFIG_COLLECTION = 'payroll_config';

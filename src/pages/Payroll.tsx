@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { DollarSign, Calendar, Download, FileText, Send, CheckCircle, Clock, AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Card, CardHeader, CardContent } from '../components/ui/Card';
-import { getPayroll, getPayrollSummary, processPayrollRun, generatePayrollFromEmployees } from '../lib/payroll';
+import { getPayroll, getPayrollSummary, processPayrollRun } from '../lib/payroll';
 import { getEmployees } from '../lib/employees';
 import { usePermissions } from '../hooks/usePermissions';
 import { useAuth } from '../contexts/AuthContext';

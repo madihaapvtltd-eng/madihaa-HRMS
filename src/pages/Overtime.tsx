@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Clock, Plus, Filter, Download, Check, X, Eye, Calendar } from 'lucide-react';
+import { Clock, Plus, Filter, Download, Check, X, Eye, Calendar, Printer } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent } from '../components/ui/Card';
 import {
@@ -9,10 +9,13 @@ import {
   createOvertimeRequest,
   validateOvertimeRequest,
 } from '../lib/overtime';
+import { getEmployees } from '../lib/employees';
 import { useAuth } from '../contexts/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { PERMISSIONS } from '../lib/permissions';
-import type { OvertimeRequest, OvertimeSummary } from '../types';
+import type { OvertimeRequest, OvertimeSummary, Employee } from '../types';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 export const Overtime = () => {
   const { user } = useAuth();
@@ -22,11 +25,13 @@ export const Overtime = () => {
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState('all');
   const [showRequestForm, setShowRequestForm] = useState(false);
-  const [newRequestDate, setNewRequestDate] = useState('');
-  const [newStartTime, setNewStartTime] = useState('');
-  const [newEndTime, setNewEndTime] = useState('');
-  const [newHours, setNewHours] = useState(0);
-  const [newReason, setNewReason] = useState('');
+  const [showSummary, setShowSummary] = useState(false);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
+  const [dailyEntries, setDailyEntries] = useState<Record<string, { startTime: string; finishTime: string; breakMinutes: number; purpose: string }>>({});
+  const [bulkStartTime, setBulkStartTime] = useState('');
+  const [bulkBreakTime, setBulkBreakTime] = useState('30');
+  const [bulkFinishTime, setBulkFinishTime] = useState('');
   const [newRequestType, setNewRequestType] = useState<'planned' | 'emergency' | 'public_holiday'>('planned');
   const [overtimeErrors, setOvertimeErrors] = useState<string[]>([]);
   const [submittingOvertime, setSubmittingOvertime] = useState(false);
@@ -34,13 +39,18 @@ export const Overtime = () => {
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const requests = await getOvertimeRequests(user?.employeeId);
+      const hasApprovePermission = can(PERMISSIONS.OVERTIME_APPROVE);
+      const [requests, empData] = await Promise.all([
+        getOvertimeRequests(hasApprovePermission ? undefined : user?.employeeId),
+        getEmployees()
+      ]);
       setOvertimeRequests(requests);
-      
+      setEmployees(empData.filter(e => e.status === 'active'));
+
       const startDate = new Date();
       startDate.setMonth(startDate.getMonth() - 1);
       const endDate = new Date();
-      
+
       const summaryData = await getOvertimeSummary(startDate, endDate, user?.employeeId);
       setSummary(summaryData);
     } catch (error) {
@@ -48,7 +58,7 @@ export const Overtime = () => {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user?.employeeId]);
 
   useEffect(() => {
     loadData();
@@ -59,51 +69,90 @@ export const Overtime = () => {
     return request.status === filterStatus;
   });
 
-  const calculateTotalHours = (start: string, end: string) => {
-    if (!start || !end) return 0;
-    const [startHours, startMinutes] = start.split(':').map(Number);
-    const [endHours, endMinutes] = end.split(':').map(Number);
-    const startDate = new Date();
-    startDate.setHours(startHours, startMinutes, 0, 0);
-    const endDate = new Date();
-    endDate.setHours(endHours, endMinutes, 0, 0);
-    const diff = (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60);
-    return diff > 0 ? Number(diff.toFixed(2)) : 0;
-  };
-
   const toggleRequestForm = () => {
     setShowRequestForm(!showRequestForm);
     setOvertimeErrors([]);
   };
 
-  const handleOvertimeSubmit = async () => {
-    if (!user?.employeeId) return;
+  // Calculate payroll cycle dates (26th of previous month to 25th of current month)
+  const getPayrollCycleDates = () => {
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
 
-    const request: Partial<OvertimeRequest> = {
-      employeeId: user.employeeId,
-      date: newRequestDate ? new Date(newRequestDate) : undefined,
-      startTime: newStartTime,
-      endTime: newEndTime,
-      hours: newHours,
-      reason: newReason,
-      requestType: newRequestType,
+    const cycleStart = new Date(currentYear, currentMonth - 1, 26);
+    const cycleEnd = new Date(currentYear, currentMonth, 25);
+
+    return {
+      start: cycleStart,
+      end: cycleEnd,
+      startFormatted: cycleStart.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+      endFormatted: cycleEnd.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
     };
+  };
 
-    const validationErrors = validateOvertimeRequest(request, new Date());
-    if (validationErrors.length > 0) {
-      setOvertimeErrors(validationErrors);
+  const payrollCycle = getPayrollCycleDates();
+
+  // Generate all dates in the payroll cycle
+  const getPayrollCycleDatesList = () => {
+    const dates = [];
+    const current = new Date(payrollCycle.start);
+    const end = new Date(payrollCycle.end);
+
+    while (current <= end) {
+      dates.push(current.toISOString().split('T')[0]);
+      current.setDate(current.getDate() + 1);
+    }
+
+    return dates;
+  };
+
+  const cycleDates = getPayrollCycleDatesList();
+
+  const handleOvertimeSubmit = async () => {
+    const employeeId = can(PERMISSIONS.OVERTIME_APPROVE) ? selectedEmployeeId : user?.employeeId;
+    if (!employeeId) return;
+
+    // Filter entries with actual overtime hours
+    const entriesWithHours = Object.entries(dailyEntries).filter(([_, entry]) => {
+      const hours = calculateOvertime(entry.startTime, entry.finishTime, entry.breakMinutes.toString());
+      return hours > 0;
+    });
+
+    if (entriesWithHours.length === 0) {
+      setOvertimeErrors(['No overtime entries to save. Please enter start/finish times.']);
       return;
     }
 
     setSubmittingOvertime(true);
     try {
-      await createOvertimeRequest(request);
-      setNewRequestDate('');
-      setNewStartTime('');
-      setNewEndTime('');
-      setNewHours(0);
-      setNewReason('');
+      // Create overtime request for each date with hours
+      for (const [date, entry] of entriesWithHours) {
+        const hours = calculateOvertime(entry.startTime, entry.finishTime, entry.breakMinutes.toString());
+        const request: Partial<OvertimeRequest> = {
+          employeeId,
+          date: new Date(date),
+          startTime: entry.startTime,
+          endTime: entry.finishTime,
+          hours,
+          reason: entry.purpose,
+          requestType: newRequestType,
+        };
+
+        const validationErrors = validateOvertimeRequest(request, new Date());
+        if (validationErrors.length > 0) {
+          setOvertimeErrors(validationErrors);
+          return;
+        }
+
+        await createOvertimeRequest(request);
+      }
+
+      setDailyEntries({});
+      setBulkBreakTime('30');
+      setBulkFinishTime('');
       setNewRequestType('planned');
+      setSelectedEmployeeId('');
       setShowRequestForm(false);
       setOvertimeErrors([]);
       loadData();
@@ -113,6 +162,186 @@ export const Overtime = () => {
     } finally {
       setSubmittingOvertime(false);
     }
+  };
+
+  const calculateOvertime = (startTime: string, finishTime: string, breakMinutes: string) => {
+    if (!startTime || !finishTime) return 0;
+    const start = new Date(`1970-01-01T${startTime}:00`);
+    const finish = new Date(`1970-01-01T${finishTime}:00`);
+    if (finish <= start) finish.setDate(finish.getDate() + 1);
+    let diff = finish.getTime() - start.getTime();
+    const breakMs = (parseInt(breakMinutes, 10) || 0) * 60 * 1000;
+    diff -= breakMs;
+    return diff > 0 ? diff / (1000 * 60 * 60) : 0;
+  };
+
+  const handleEntryChange = (date: string, field: string, value: string | number) => {
+    setDailyEntries(prev => ({
+      ...prev,
+      [date]: {
+        ...prev[date],
+        [field]: value,
+        startTime: prev[date]?.startTime || '',
+        finishTime: prev[date]?.finishTime || '',
+        breakMinutes: prev[date]?.breakMinutes || 30,
+        purpose: prev[date]?.purpose || ''
+      }
+    }));
+  };
+
+  const applyBulkEdit = () => {
+    const updatedEntries = { ...dailyEntries };
+    let appliedCount = 0;
+
+    cycleDates.forEach(date => {
+      const entry = updatedEntries[date] || { startTime: '', finishTime: '', breakMinutes: 30, purpose: '' };
+      if (bulkStartTime) {
+        entry.startTime = bulkStartTime;
+        appliedCount++;
+      }
+      if (bulkFinishTime) {
+        entry.finishTime = bulkFinishTime;
+        appliedCount++;
+      }
+      if (bulkBreakTime) {
+        entry.breakMinutes = parseInt(bulkBreakTime);
+        appliedCount++;
+      }
+      updatedEntries[date] = entry;
+    });
+
+    setDailyEntries(updatedEntries);
+    alert(`Bulk changes applied to ${appliedCount} entries.`);
+  };
+
+  const generateOTForm = () => {
+    const employee = employees.find(e => e.id === selectedEmployeeId);
+    if (!employee) {
+      alert('Please select an employee first.');
+      return;
+    }
+
+    const doc = new jsPDF('p', 'mm', 'a4');
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    // Header
+    doc.setFontSize(16);
+    doc.text('OVERTIME FORM', pageWidth / 2, 15, { align: 'center' });
+
+    // Employee details
+    doc.setFontSize(10);
+    doc.text(`Name: ${employee.fullName}`, 20, 30);
+    doc.text(`ID: ${employee.employeeId}`, 20, 38);
+    doc.text(`Department: ${employee.department || 'N/A'}`, 20, 46);
+    doc.text(`Period: ${payrollCycle.startFormatted} to ${payrollCycle.endFormatted}`, 20, 54);
+
+    // Table headers
+    const tableData = cycleDates.map(date => {
+      const entry = dailyEntries[date] || { startTime: '', finishTime: '', breakMinutes: 30, purpose: '' };
+      const hours = calculateOvertime(entry.startTime, entry.finishTime, entry.breakMinutes.toString());
+      return [
+        new Date(date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }),
+        entry.startTime,
+        entry.finishTime,
+        entry.breakMinutes,
+        hours > 0 ? hours.toFixed(2) : '',
+        entry.purpose
+      ];
+    });
+
+    autoTable(doc, {
+      startY: 65,
+      head: [['Date', 'Start Time', 'Finish Time', 'Break (min)', 'Total OT (hrs)', 'Purpose']],
+      body: tableData,
+      theme: 'grid',
+      headStyles: { fillColor: [59, 130, 246], fontSize: 8 },
+      styles: { fontSize: 7, cellPadding: 2 },
+      columnStyles: {
+        0: { cellWidth: 25 },
+        1: { cellWidth: 25 },
+        2: { cellWidth: 25 },
+        3: { cellWidth: 25 },
+        4: { cellWidth: 25 },
+        5: { cellWidth: 35 }
+      }
+    });
+
+    // Signature section
+    const finalY = (doc as any).lastAutoTable.finalY + 20;
+    doc.setFontSize(10);
+    doc.text('______________________', 30, finalY);
+    doc.text('Employee Signature', 30, finalY + 8);
+    doc.text('______________________', 120, finalY);
+    doc.text('Date', 120, finalY + 8);
+
+    doc.text('______________________', 30, finalY + 25);
+    doc.text('Supervisor Signature', 30, finalY + 33);
+    doc.text('______________________', 120, finalY + 25);
+    doc.text('Date', 120, finalY + 33);
+
+    doc.save(`OT_Form_${employee.employeeId}_${payrollCycle.startFormatted}.pdf`);
+  };
+
+  const exportSummaryToPDF = () => {
+    const doc = new jsPDF('l', 'mm', 'a4');
+
+    doc.setFontSize(14);
+    doc.text(`Overtime Summary - ${payrollCycle.startFormatted} to ${payrollCycle.endFormatted}`, 14, 15);
+
+    const headers = ['Employee', 'ID', ...cycleDates.map(d => new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })), 'Total'];
+    const body = employees.map(employee => {
+      const employeeRequests = overtimeRequests.filter(r => r.employeeId === employee.id);
+      let totalHours = 0;
+      const dateHours = cycleDates.map(date => {
+        const request = employeeRequests.find(r => {
+          const reqDate = new Date(r.date).toISOString().split('T')[0];
+          return reqDate === date;
+        });
+        const hours = request?.hours || 0;
+        totalHours += hours;
+        return hours > 0 ? hours.toFixed(2) : '-';
+      });
+
+      return [employee.fullName, employee.employeeId, ...dateHours, totalHours.toFixed(2)];
+    });
+
+    autoTable(doc, {
+      startY: 25,
+      head: [headers],
+      body,
+      theme: 'grid',
+      headStyles: { fillColor: [59, 130, 246], fontSize: 6 },
+      styles: { fontSize: 5, cellPadding: 1 },
+      columnStyles: { 0: { cellWidth: 25 }, 1: { cellWidth: 12 } }
+    });
+
+    doc.save(`OT_Summary_${payrollCycle.startFormatted}.pdf`);
+  };
+
+  const exportSummaryToExcel = () => {
+    const headers = ['Employee', 'ID', ...cycleDates.map(d => new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })), 'Total'];
+    const body = employees.map(employee => {
+      const employeeRequests = overtimeRequests.filter(r => r.employeeId === employee.id);
+      let totalHours = 0;
+      const dateHours = cycleDates.map(date => {
+        const request = employeeRequests.find(r => {
+          const reqDate = new Date(r.date).toISOString().split('T')[0];
+          return reqDate === date;
+        });
+        const hours = request?.hours || 0;
+        totalHours += hours;
+        return hours > 0 ? hours.toFixed(2) : '-';
+      });
+
+      return [employee.fullName, employee.employeeId, ...dateHours, totalHours.toFixed(2)];
+    });
+
+    const csvContent = [headers, ...body].map(row => row.join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `OT_Summary_${payrollCycle.startFormatted}.csv`;
+    link.click();
   };
 
   const statusColors = {
@@ -144,54 +373,38 @@ export const Overtime = () => {
             Request Overtime
           </Button>
         )}
+        {can(PERMISSIONS.OVERTIME_APPROVE) && (
+          <Button variant="secondary" onClick={() => setShowSummary(!showSummary)} className="sm:w-auto w-full">
+            <Download className="w-5 h-5 mr-2" />
+            Monthly Summary
+          </Button>
+        )}
       </div>
 
       {showRequestForm && (
         <Card>
           <CardContent className="p-4">
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-secondary-700 mb-1">Date</label>
-                <input
-                  type="date"
-                  value={newRequestDate}
-                  onChange={(e) => setNewRequestDate(e.target.value)}
-                  className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-secondary-700 mb-1">Start Time</label>
-                <input
-                  type="time"
-                  value={newStartTime}
-                  onChange={(e) => {
-                    setNewStartTime(e.target.value);
-                    setNewHours(calculateTotalHours(e.target.value, newEndTime));
-                  }}
-                  className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-secondary-700 mb-1">End Time</label>
-                <input
-                  type="time"
-                  value={newEndTime}
-                  onChange={(e) => {
-                    setNewEndTime(e.target.value);
-                    setNewHours(calculateTotalHours(newStartTime, e.target.value));
-                  }}
-                  className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-secondary-700 mb-1">Hours</label>
-                <input
-                  type="number"
-                  value={newHours}
-                  readOnly
-                  className="w-full px-4 py-2 border border-secondary-300 rounded-lg bg-secondary-50"
-                />
-              </div>
+            <div className="mb-4 p-3 bg-blue-50 rounded-lg">
+              <p className="text-sm text-blue-800">
+                <strong>Payroll Cycle:</strong> {payrollCycle.startFormatted} to {payrollCycle.endFormatted}
+              </p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              {can(PERMISSIONS.OVERTIME_APPROVE) && (
+                <div>
+                  <label className="block text-sm font-medium text-secondary-700 mb-1">Employee</label>
+                  <select
+                    value={selectedEmployeeId}
+                    onChange={(e) => setSelectedEmployeeId(e.target.value)}
+                    className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="">Select Employee</option>
+                    {employees.map(emp => (
+                      <option key={emp.id} value={emp.id}>{emp.fullName} ({emp.employeeId})</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-secondary-700 mb-1">Request Type</label>
                 <select
@@ -205,15 +418,118 @@ export const Overtime = () => {
                 </select>
               </div>
             </div>
-            <div className="mt-4">
-              <label className="block text-sm font-medium text-secondary-700 mb-1">Reason</label>
-              <textarea
-                value={newReason}
-                onChange={(e) => setNewReason(e.target.value)}
-                rows={3}
-                className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-              />
+
+            {/* Bulk Edit Section */}
+            <div className="mb-4 p-3 bg-secondary-50 rounded-lg">
+              <p className="text-sm font-medium text-secondary-700 mb-2">Bulk Edit (apply to all dates)</p>
+              <div className="flex gap-4">
+                <div>
+                  <label className="block text-xs text-secondary-600 mb-1">Start Time</label>
+                  <input
+                    type="text"
+                    placeholder="HH:MM"
+                    value={bulkStartTime}
+                    onChange={(e) => setBulkStartTime(e.target.value)}
+                    className="px-3 py-1 border border-secondary-300 rounded text-sm"
+                    maxLength={5}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-secondary-600 mb-1">Finish Time</label>
+                  <input
+                    type="text"
+                    placeholder="HH:MM"
+                    value={bulkFinishTime}
+                    onChange={(e) => setBulkFinishTime(e.target.value)}
+                    className="px-3 py-1 border border-secondary-300 rounded text-sm"
+                    maxLength={5}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-secondary-600 mb-1">Break (min)</label>
+                  <input
+                    type="number"
+                    value={bulkBreakTime}
+                    onChange={(e) => setBulkBreakTime(e.target.value)}
+                    className="px-3 py-1 border border-secondary-300 rounded text-sm w-20"
+                  />
+                </div>
+                <button
+                  onClick={applyBulkEdit}
+                  className="px-3 py-1 bg-primary-600 text-white rounded text-sm hover:bg-primary-700"
+                >
+                  Apply
+                </button>
+              </div>
             </div>
+
+            {/* Daily Entry Table */}
+            <div className="overflow-x-auto max-h-96 overflow-y-auto border border-secondary-300 rounded-lg">
+              <table className="w-full text-sm">
+                <thead className="bg-secondary-50 sticky top-0">
+                  <tr>
+                    <th className="px-3 py-2 text-left">Date</th>
+                    <th className="px-3 py-2 text-left">Start</th>
+                    <th className="px-3 py-2 text-left">Finish</th>
+                    <th className="px-3 py-2 text-left">Break (min)</th>
+                    <th className="px-3 py-2 text-left">Hours</th>
+                    <th className="px-3 py-2 text-left">Purpose</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cycleDates.map(date => {
+                    const entry = dailyEntries[date] || { startTime: '', finishTime: '', breakMinutes: 30, purpose: '' };
+                    const hours = calculateOvertime(entry.startTime, entry.finishTime, entry.breakMinutes.toString());
+                    return (
+                      <tr key={date} className="border-t border-secondary-200">
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          {new Date(date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                        </td>
+                        <td className="px-3 py-2">
+                          <input
+                            type="text"
+                            placeholder="HH:MM"
+                            value={entry.startTime}
+                            onChange={(e) => handleEntryChange(date, 'startTime', e.target.value)}
+                            className="w-full px-2 py-1 border border-secondary-300 rounded"
+                            maxLength={5}
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <input
+                            type="text"
+                            placeholder="HH:MM"
+                            value={entry.finishTime}
+                            onChange={(e) => handleEntryChange(date, 'finishTime', e.target.value)}
+                            className="w-full px-2 py-1 border border-secondary-300 rounded"
+                            maxLength={5}
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <input
+                            type="number"
+                            value={entry.breakMinutes}
+                            onChange={(e) => handleEntryChange(date, 'breakMinutes', parseInt(e.target.value))}
+                            className="w-full px-2 py-1 border border-secondary-300 rounded w-16"
+                          />
+                        </td>
+                        <td className="px-3 py-2 font-medium">{hours.toFixed(2)}</td>
+                        <td className="px-3 py-2">
+                          <input
+                            type="text"
+                            value={entry.purpose}
+                            onChange={(e) => handleEntryChange(date, 'purpose', e.target.value)}
+                            className="w-full px-2 py-1 border border-secondary-300 rounded"
+                            placeholder="Purpose"
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
             {overtimeErrors.length > 0 && (
               <div className="mt-4 space-y-2 text-sm text-red-600">
                 {overtimeErrors.map((error, index) => (
@@ -223,11 +539,84 @@ export const Overtime = () => {
             )}
             <div className="mt-4 flex flex-wrap gap-3">
               <Button onClick={handleOvertimeSubmit} loading={submittingOvertime}>
-                Submit Overtime Request
+                Save Overtime Entries
               </Button>
+              {can(PERMISSIONS.OVERTIME_APPROVE) && (
+                <Button variant="secondary" onClick={generateOTForm}>
+                  <Printer className="w-4 h-4 mr-2" />
+                  Print OT Form
+                </Button>
+              )}
               <Button variant="secondary" onClick={toggleRequestForm}>
                 Cancel
               </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Monthly Summary */}
+      {showSummary && can(PERMISSIONS.OVERTIME_APPROVE) && (
+        <Card>
+          <CardContent className="p-4">
+            <div className="mb-4 p-3 bg-blue-50 rounded-lg flex justify-between items-center">
+              <p className="text-sm text-blue-800">
+                <strong>Payroll Cycle:</strong> {payrollCycle.startFormatted} to {payrollCycle.endFormatted}
+              </p>
+              <div className="flex gap-2">
+                <Button variant="secondary" size="sm" onClick={exportSummaryToPDF}>
+                  <Download className="w-4 h-4 mr-2" />
+                  PDF
+                </Button>
+                <Button variant="secondary" size="sm" onClick={exportSummaryToExcel}>
+                  <Download className="w-4 h-4 mr-2" />
+                  Excel
+                </Button>
+              </div>
+            </div>
+            <div className="overflow-x-auto max-h-96 overflow-y-auto border border-secondary-300 rounded-lg">
+              <table className="w-full text-sm">
+                <thead className="bg-secondary-50 sticky top-0">
+                  <tr>
+                    <th className="px-3 py-2 text-left">Employee</th>
+                    {cycleDates.map(date => (
+                      <th key={date} className="px-2 py-2 text-center text-xs">
+                        {new Date(date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                      </th>
+                    ))}
+                    <th className="px-3 py-2 text-center">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {employees.map(employee => {
+                    const employeeRequests = overtimeRequests.filter(r => r.employeeId === employee.id);
+                    let totalHours = 0;
+
+                    return (
+                      <tr key={employee.id} className="border-t border-secondary-200">
+                        <td className="px-3 py-2 whitespace-nowrap font-medium">
+                          {employee.fullName}
+                          <span className="text-xs text-secondary-500 block">{employee.employeeId}</span>
+                        </td>
+                        {cycleDates.map(date => {
+                          const request = employeeRequests.find(r => {
+                            const reqDate = new Date(r.date).toISOString().split('T')[0];
+                            return reqDate === date;
+                          });
+                          const hours = request?.hours || 0;
+                          totalHours += hours;
+                          return (
+                            <td key={date} className="px-2 py-2 text-center">
+                              {hours > 0 ? hours.toFixed(2) : '-'}
+                            </td>
+                          );
+                        })}
+                        <td className="px-3 py-2 text-center font-bold">{totalHours.toFixed(2)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </CardContent>
         </Card>

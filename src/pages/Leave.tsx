@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Calendar, Plus, Filter, Download, X, Eye, Check, X as XIcon, CheckSquare, Square, Upload } from 'lucide-react';
+import { Calendar, Plus, X, Eye, Check, X as XIcon, CheckSquare, Square, Upload } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent } from '../components/ui/Card';
 import { createLeaveRequest, cancelLeaveRequest, getLeaveRequests, validateLeaveRequest, calculateLeaveDays, approveLeaveRequest, rejectLeaveRequest, deleteLeaveRequest, bulkDeleteLeaveRequests } from '../lib/leave';
@@ -17,6 +17,7 @@ export const Leave = () => {
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'pending' | 'approved' | 'rejected'>('pending');
+  const [selectedTypeFilter, setSelectedTypeFilter] = useState<LeaveType | 'all'>('all');
   const [showLeaveForm, setShowLeaveForm] = useState(false);
   const [newLeaveType, setNewLeaveType] = useState<LeaveType>('annual');
   const [newStartDate, setNewStartDate] = useState('');
@@ -64,8 +65,31 @@ export const Leave = () => {
     loadData();
   }, [loadData]);
 
+  // Filter requests for the current employee (without status filter for summary)
+  const employeeRequests = leaveRequests.filter(request => {
+    if (user?.role === 'employee' && user?.employeeId) {
+      const employeesData = employees.find(e => e.employeeId === user.employeeId);
+      const employeeDocId = employeesData?.id;
+      // Match by employee document ID first, fallback to matching by employeeId field
+      return employeeDocId ? request.employeeId === employeeDocId : request.employeeId === user.employeeId;
+    }
+    return true; // For non-employees, return all requests
+  });
+
   const filteredRequests = leaveRequests.filter(request => {
-    return request.status === activeTab;
+    // If user is an employee, only show their own leave requests
+    if (user?.role === 'employee' && user?.employeeId) {
+      const employeesData = employees.find(e => e.employeeId === user.employeeId);
+      const employeeDocId = employeesData?.id;
+      const statusMatch = request.status === activeTab;
+      // Match by employee document ID first, fallback to matching by employeeId field
+      const employeeMatch = employeeDocId ? request.employeeId === employeeDocId : request.employeeId === user.employeeId;
+      const typeMatch = selectedTypeFilter === 'all' || request.type === selectedTypeFilter;
+      return statusMatch && employeeMatch && typeMatch;
+    }
+    const statusMatch = request.status === activeTab;
+    const typeMatch = selectedTypeFilter === 'all' || request.type === selectedTypeFilter;
+    return statusMatch && typeMatch;
   });
 
   const statusColors = {
@@ -73,6 +97,42 @@ export const Leave = () => {
     approved: 'bg-green-100 text-green-800',
     rejected: 'bg-red-100 text-red-800',
     cancelled: 'bg-gray-100 text-gray-800',
+  };
+
+  const typeColors = {
+    annual: 'bg-blue-100 text-blue-800',
+    medical: 'bg-red-100 text-red-800',
+    emergency: 'bg-orange-100 text-orange-800',
+    duty: 'bg-purple-100 text-purple-800',
+    unpaid: 'bg-gray-100 text-gray-800',
+    maternity: 'bg-pink-100 text-pink-800',
+    paternity: 'bg-indigo-100 text-indigo-800',
+    compassionate: 'bg-teal-100 text-teal-800',
+    off_day: 'bg-cyan-100 text-cyan-800',
+  };
+
+  const typeLabels = {
+    annual: 'Annual Leave',
+    medical: 'Medical Leave',
+    emergency: 'Emergency Leave',
+    duty: 'Duty Leave',
+    unpaid: 'Unpaid Leave',
+    maternity: 'Maternity Leave',
+    paternity: 'Paternity Leave',
+    compassionate: 'Compassionate Leave',
+    off_day: 'Off Day',
+  };
+
+  const typeIcons = {
+    annual: '📅',
+    medical: '🏥',
+    emergency: '🚨',
+    duty: '💼',
+    unpaid: '💸',
+    maternity: '👶',
+    paternity: '👨‍👧',
+    compassionate: '❤️',
+    off_day: '🏖️',
   };
 
   const calculateDaysFromRange = (start: string, end: string) => {
@@ -267,75 +327,104 @@ export const Leave = () => {
             return;
           }
         }
-        
-        // Find the row with Excel serial dates (could be before or after header)
-        let dateRowIndex = -1;
-        for (let i = 0; i < jsonData.length; i++) {
+
+        // Find date header rows specifically (not employee data rows)
+        // Date header rows have consecutive dates across many columns
+        const dateRowIndices: number[] = [];
+        for (let i = 0; i < Math.min(10, jsonData.length); i++) {
           const row = jsonData[i] as any[];
-          if (row.some((cell: any) => typeof cell === 'number' && cell > 40000)) {
-            dateRowIndex = i;
-            break;
-          }
-        }
-        
-        if (dateRowIndex === -1) {
-          for (let i = 0; i < jsonData.length; i++) {
-            const row = jsonData[i] as any[];
-            if (row.some((cell: any) => String(cell).match(/^\d{2}-[^\d]+-\d{2}$/))) {
-              dateRowIndex = i;
-              break;
-            }
-          }
-        }
-        
-        if (dateRowIndex >= 0 && dateRowIndex < jsonData.length) {
-          const dateRow = jsonData[dateRowIndex] as any[];
-          
-          // Map dates from date row to corresponding data columns
-          // Date row starts with empty cells, then dates at specific columns
-          // Data row has: S NO, User ID, Name, then IN/OUT pairs for each day
-          // We need to align the dates with the IN/OUT columns
-          
-          let dateIndex = 0;
-          for (let col = 0; col < dateRow.length; col++) {
-            const cell = dateRow[col];
-            const cellStr = String(cell);
-            
-            // Check for Excel serial date (number > 40000)
+          let dateCount = 0;
+          for (const cell of row) {
             if (typeof cell === 'number' && cell > 40000) {
-              // Convert Excel serial date to JavaScript Date
-              const excelDate = new Date(Math.round((cell - 25569) * 86400 * 1000));
-              const isoDate = excelDate.toISOString().split('T')[0];
-              
-              // Map to data column: S NO(0), User ID(1), Name(2), then IN/OUT pairs starting at 3
-              // Each day has 2 columns (IN, OUT), so day 0 starts at column 3, day 1 at 5, etc.
-              const dataCol = 3 + (dateIndex * 2);
-              dateHeaders[dataCol] = isoDate;
-              dateIndex++;
+              dateCount++;
+            } else if (String(cell).match(/^\d{2}-[^\d]+-\d{2}$/)) {
+              dateCount++;
             }
-            // Check for Dhivehi text date format
-            else if (cellStr.match(/^\d{2}-[^\d]+-\d{2}$/)) {
-              const parts = cellStr.split('-');
-              if (parts.length === 3) {
-                const day = parseInt(parts[0], 10);
-                const year = parseInt('20' + parts[2], 10);
-                const dhivehiMonths: Record<string, number> = {
-                  'ޖަނަވަރީ': 0, 'ފެބްރުއަރީ': 1, 'މާރޗް': 2,
-                  'އޭޕްރިލް': 3, 'މެއި': 4, 'ޖޫން': 5,
-                  'ޖުލައި': 6, 'އޮގަސްޓް': 7, 'ސެޕްޓެމްބަރު': 8,
-                  'އޮކްޓޫބަރު': 9, 'ނޮވެމްބަރު': 10, 'ޑިސެމްބަރު': 11
-                };
-                const month = dhivehiMonths[parts[1]] || 0;
-                const date = new Date(year, month, day);
-                const isoDate = date.toISOString().split('T')[0];
-                
-                const dataCol = 3 + (dateIndex * 2);
-                dateHeaders[dataCol] = isoDate;
-                dateIndex++;
+          }
+          // Only consider it a date header row if it has at least 10 dates
+          if (dateCount >= 10) {
+            dateRowIndices.push(i);
+          }
+        }
+
+        console.log('Excel Upload - Found date header rows at indices:', dateRowIndices);
+
+        // Process each date row
+        let dateIndex = 0;
+        for (const dateRowIndex of dateRowIndices) {
+          if (dateRowIndex >= 0 && dateRowIndex < jsonData.length) {
+            const dateRow = jsonData[dateRowIndex] as any[];
+            console.log(`Excel Upload - Processing date row ${dateIndex} at index ${dateRowIndex}:`, dateRow.slice(0, 20));
+
+            // Map dates from date row to corresponding data columns
+            // Excel structure: S No, User ID, Name, then (Date IN, Date OUT) pairs
+            // Dates are in the date row, data is in rows below
+            // Each date has 2 columns: IN (odd) and OUT (even)
+            // We need to map the date to the IN column where leave codes appear
+
+            let sectionDateIndex = 0;
+
+            for (let col = 0; col < dateRow.length; col++) {
+              const cell = dateRow[col];
+              const cellStr = String(cell);
+
+              // Check for Excel serial date (number > 40000)
+              if (typeof cell === 'number' && cell > 40000) {
+                // Convert Excel serial date to JavaScript Date
+                const excelDate = new Date(Math.round((cell - 25569) * 86400 * 1000));
+                console.log(`Excel Upload - Raw Excel serial date: ${cell}, JS Date (UTC): ${excelDate.toISOString()}`);
+                // Use local date instead of UTC to avoid timezone shifts
+                const year = excelDate.getFullYear();
+                const month = String(excelDate.getMonth() + 1).padStart(2, '0');
+                const day = String(excelDate.getDate()).padStart(2, '0');
+                const isoDate = `${year}-${month}-${day}`;
+
+                // Only process October 2026 dates (2026-10)
+                if (year === 2026 && month === '10') {
+                  // Map to the IN column (the column where the date is found)
+                  // Leave codes are in the IN column, not OUT column
+                  const dataCol = col;
+                  dateHeaders[dataCol] = isoDate;
+                  console.log(`Excel Upload - Section ${dateIndex}: Column ${col} -> Data column ${dataCol}, Date: ${isoDate} (local)`);
+                  sectionDateIndex++;
+                } else {
+                  console.log(`Excel Upload - Skipping date ${isoDate} (not October 2026)`);
+                }
+              }
+              // Check for Dhivehi text date format
+              else if (cellStr.match(/^\d{2}-[^\d]+-\d{2}$/)) {
+                const parts = cellStr.split('-');
+                if (parts.length === 3) {
+                  const day = parseInt(parts[0], 10);
+                  const year = parseInt('20' + parts[2], 10);
+                  const dhivehiMonths: Record<string, number> = {
+                    'ޖަނަވަރީ': 0, 'ފެބްރުއަރީ': 1, 'މާރޗް': 2,
+                    'އޭޕްރިލް': 3, 'މެއި': 4, 'ޖޫން': 5,
+                    'ޖުލައި': 6, 'އޮގަސްޓް': 7, 'ސެޕްޓެމްބަރު': 8,
+                    'އޮކްޓޯބަރ': 9, 'އޮކްޓޫބަރު': 9, 'ނޮވެމްބަރު': 10, 'ޑިސެމްބަރު': 11
+                  };
+                  const month = dhivehiMonths[parts[1]] || 0;
+                  const date = new Date(year, month, day);
+                  const isoDate = date.toISOString().split('T')[0];
+
+                  // Only process October 2026 dates (2026-10)
+                  if (year === 2026 && month === 9) {
+                    const dataCol = col;
+                    dateHeaders[dataCol] = isoDate;
+                    console.log(`Excel Upload - Section ${dateIndex}: Column ${col} (${cellStr}) -> Data column ${dataCol}, Date: ${isoDate}`);
+                    sectionDateIndex++;
+                  } else {
+                    console.log(`Excel Upload - Skipping date ${isoDate} (not October 2026)`);
+                  }
+                }
               }
             }
+
+            dateIndex++;
           }
         }
+
+        console.log('Excel Upload - Final dateHeaders:', dateHeaders);
         
         // Determine starting row for data
         const startRow = headerRowIndex >= 0 ? headerRowIndex + 1 : 0;
@@ -347,52 +436,49 @@ export const Leave = () => {
           const empId = row[1]; // User ID is in column 1
           const empName = row[2]; // Name is in column 2
           if (!empId || empId === 'User ID') continue;
-          
+
           // Normalize inputs for matching
           const empIdNorm = String(empId).trim().toUpperCase();
           const empNameNorm = String(empName).trim().toLowerCase();
-          
-          console.log('Matching employee:', empIdNorm, empNameNorm);
-          
-          // Match with existing employee in system (more flexible matching)
+
+          console.log('Excel Upload - Processing row:', i, 'Employee:', empIdNorm, empNameNorm);
+
+          // Match with existing employee in system (strict matching only)
           const matchedEmp = employees.find(e => {
             const sysEmpId = String(e.employeeId).trim().toUpperCase();
             const sysName = String(e.fullName).trim().toLowerCase();
             const empIdMatch = sysEmpId === empIdNorm;
             const empNameMatch = sysName === empNameNorm;
-            
-            // Flexible ID matching: check if one ID contains the other (e.g., MAD0653 vs AD0653)
-            const empIdContains = sysEmpId.includes(empIdNorm) || empIdNorm.includes(sysEmpId);
-            // Also try matching by removing common prefixes
-            const empIdNumMatch = sysEmpId.replace(/^[A-Z]+/, '') === empIdNorm.replace(/^[A-Z]+/, '');
-            
-            // Also try partial name matching (first name or last name)
-            const empNameParts = empNameNorm.split(' ');
-            const empNamePartial = empNameParts.some(part => 
-              part.length > 2 && sysName.includes(part)
-            );
-            
-            if (empIdMatch || empNameMatch || empNamePartial || empIdContains || empIdNumMatch) {
-              console.log('Matched with system employee:', sysEmpId, sysName, 'via:', 
-                empIdMatch ? 'ID' : empNameMatch ? 'Name' : empNamePartial ? 'Partial Name' : empIdContains ? 'ID Contains' : 'ID Num');
+
+            // Match by numeric part of ID (e.g., MAD0653 matches D0653)
+            const empIdNumMatch = sysEmpId.replace(/^[A-Z]+/, '') === empIdNorm.replace(/^[A-Z]+/, '') &&
+                                 sysEmpId.replace(/^[A-Z]+/, '').length >= 4;
+
+            // Only use exact matches - no partial name matching to avoid false positives
+            const match = empIdMatch || empNameMatch || (empIdNumMatch && empIdNorm.length >= 4);
+
+            if (match) {
+              console.log('Excel Upload - Matched with system employee:', sysEmpId, sysName, 'via:',
+                empIdMatch ? 'ID' : empNameMatch ? 'Name' : 'ID Num');
             }
-            
-            return empIdMatch || empNameMatch || empNamePartial || empIdContains || empIdNumMatch;
+
+            return match;
           });
-          
+
           if (!matchedEmp) {
-            console.log('No match found for:', empIdNorm, empNameNorm);
+            console.log('Excel Upload - No match found for:', empIdNorm, empNameNorm);
           }
-          
-          
+
+
           // Parse each column that has a date header
+          let rowLeaveCount = 0;
           for (const [col, dateStr] of Object.entries(dateHeaders)) {
             const colIndex = parseInt(col, 10);
             if (colIndex >= row.length) continue;
-            
+
             const value = row[colIndex];
             if (!value) continue;
-            
+
             // Check for leave codes
             let leaveType = null;
             if (['AL', 'EL', 'SICK', 'SP', 'FL', 'OFF', 'MC', 'SUS', 'NL', 'HD', 'AB'].includes(value)) {
@@ -400,8 +486,9 @@ export const Leave = () => {
             } else if (value === '1' || typeof value === 'number') {
               continue;
             }
-            
+
             if (leaveType) {
+              console.log(`Excel Upload - Found leave: ${empIdNorm} on ${dateStr}, Type: ${leaveType}, Column: ${colIndex}`);
               parsed.push({
                 employeeId: empId,
                 employeeName: empName,
@@ -413,7 +500,12 @@ export const Leave = () => {
                 matched: !!matchedEmp,
                 isSummary: false
               });
+              rowLeaveCount++;
             }
+          }
+
+          if (rowLeaveCount > 0) {
+            console.log(`Excel Upload - Total leaves found for ${empIdNorm}: ${rowLeaveCount}`);
           }
         }
       } else {
@@ -649,13 +741,29 @@ export const Leave = () => {
       }
       
       try {
+        // Parse date as local date to avoid timezone shifts
+        const [year, month, day] = leave.date.split('-').map(Number);
+        const startDate = new Date(year, month - 1, day);
+        const endDate = new Date(year, month - 1, day);
+
         await createLeaveRequest({
           employeeId: leave.matchedEmployeeId,
           type: leave.mappedType,
-          startDate: new Date(leave.date),
-          endDate: new Date(leave.date), // Single day for summary format
+          startDate: startDate,
+          endDate: endDate, // Single day for summary format
           days: leave.days || 1,
-          reason: `Imported from Excel Summary (${leave.leaveType})`
+          reason: `Imported from Excel Summary (${leave.leaveType})`,
+          status: 'approved',
+          balanceAdjusted: true,
+          appliedDate: new Date(),
+          approvals: [{
+            level: 1,
+            approverId: 'system',
+            approverName: 'System',
+            status: 'approved',
+            comments: 'Auto-approved from Excel import',
+            actionDate: new Date()
+          }]
         });
         successCount++;
       } catch (error) {
@@ -689,13 +797,30 @@ export const Leave = () => {
           }
           
           for (const leave of group.leaves) {
+            // Parse dates as local dates to avoid timezone shifts
+            const [startYear, startMonth, startDay] = leave.startDate.split('-').map(Number);
+            const [endYear, endMonth, endDay] = leave.endDate.split('-').map(Number);
+            const startDate = new Date(startYear, startMonth - 1, startDay);
+            const endDate = new Date(endYear, endMonth - 1, endDay);
+
             await createLeaveRequest({
               employeeId: empId,
               type: leave.type,
-              startDate: new Date(leave.startDate),
-              endDate: new Date(leave.endDate),
+              startDate: startDate,
+              endDate: endDate,
               days: leave.days,
-              reason: `Imported from Excel (${leave.type})`
+              reason: `Imported from Excel (${leave.type})`,
+              status: 'approved',
+              balanceAdjusted: true,
+              appliedDate: new Date(),
+              approvals: [{
+                level: 1,
+                approverId: 'system',
+                approverName: 'System',
+                status: 'approved',
+                comments: 'Auto-approved from Excel import',
+                actionDate: new Date()
+              }]
             });
             successCount++;
           }
@@ -727,16 +852,16 @@ export const Leave = () => {
   };
 
   const handleBulkDeleteLeaves = async () => {
+    setBulkDeleteSubmitting(true);
     try {
-      setBulkDeleteSubmitting(true);
-      const selectedIds = Array.from(selectedRequests);
-      await bulkDeleteLeaveRequests(selectedIds);
-      setBulkDeleteModal({ show: false });
+      await bulkDeleteLeaveRequests(Array.from(selectedRequests));
+      await loadData();
       setSelectedRequests(new Set());
-      loadData();
+      setBulkDeleteModal({ show: false });
+      alert('Leave requests deleted successfully!');
     } catch (error) {
-      console.error('Error bulk deleting leaves:', error);
-      alert('Error deleting leave requests');
+      console.error('Error deleting leave requests:', error);
+      alert('Failed to delete leave requests. Please try again.');
     } finally {
       setBulkDeleteSubmitting(false);
     }
@@ -919,15 +1044,6 @@ export const Leave = () => {
     }
   };
 
-  const handleOpenBulkApproval = (action: 'approve' | 'reject') => {
-    if (selectedRequests.size === 0) {
-      alert('Please select at least one request');
-      return;
-    }
-    setBulkModal({ show: true, action });
-    setBulkComments('');
-  };
-
   const handleCloseBulkApproval = () => {
     setBulkModal({ show: false, action: 'approve' });
     setBulkComments('');
@@ -978,30 +1094,6 @@ export const Leave = () => {
     setViewModal({ show: false, request: null });
   };
 
-  const typeColors: Record<LeaveType, string> = {
-    annual: 'bg-blue-100 text-blue-800',
-    medical: 'bg-purple-100 text-purple-800',
-    emergency: 'bg-red-100 text-red-800',
-    duty: 'bg-green-100 text-green-800',
-    unpaid: 'bg-gray-100 text-gray-800',
-    maternity: 'bg-pink-100 text-pink-800',
-    paternity: 'bg-cyan-100 text-cyan-800',
-    compassionate: 'bg-amber-100 text-amber-800',
-    off_day: 'bg-indigo-100 text-indigo-800',
-  };
-
-  const typeLabels: Record<LeaveType, string> = {
-    annual: 'Annual Leave',
-    medical: 'Sick Leave',
-    emergency: 'Emergency Leave',
-    duty: 'Duty Leave',
-    unpaid: 'Unpaid Leave',
-    maternity: 'Maternity Leave',
-    paternity: 'Paternity Leave',
-    compassionate: 'Compassionate Leave',
-    off_day: 'Off Day',
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -1010,13 +1102,27 @@ export const Leave = () => {
     );
   }
 
+  // Calculate leave summary by type (from all employee requests, not filtered by status)
+  const leaveSummary = employeeRequests.reduce((acc, request) => {
+    if (!acc[request.type]) {
+      acc[request.type] = { count: 0, days: 0 };
+    }
+    acc[request.type].count += 1;
+    acc[request.type].days += request.days;
+    return acc;
+  }, {} as Record<LeaveType, { count: number; days: number }>);
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-secondary-900">Leave Management</h1>
-          <p className="text-secondary-600 mt-1">Manage leave requests and balances</p>
+          <h1 className="text-3xl font-bold text-secondary-900">
+            {user?.role === 'employee' ? 'My Leaves' : 'Leave Management'}
+          </h1>
+          <p className="text-secondary-600 mt-1">
+            {user?.role === 'employee' ? 'View your leave history and balances' : 'Manage leave requests and balances'}
+          </p>
         </div>
         <div className="flex gap-2 sm:w-auto w-full">
           <input
@@ -1043,6 +1149,92 @@ export const Leave = () => {
           )}
         </div>
       </div>
+
+      {/* Leave Summary Cards - Only for employees */}
+      {user?.role === 'employee' && Object.keys(leaveSummary).length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+          {Object.entries(leaveSummary).map(([type, summary]) => (
+            <div key={type} className="hover:shadow-lg transition-shadow cursor-pointer p-4 bg-white rounded-lg border border-secondary-200" onClick={() => setSelectedTypeFilter(type as LeaveType)}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-2xl">{typeIcons[type as LeaveType]}</span>
+                <span className={`px-2 py-1 rounded-full text-xs font-semibold ${typeColors[type as LeaveType]}`}>
+                  {typeLabels[type as LeaveType]}
+                </span>
+              </div>
+              <div className="space-y-1">
+                <div className="flex justify-between text-sm">
+                  <span className="text-secondary-600">Requests:</span>
+                  <span className="font-bold text-secondary-900">{summary.count}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-secondary-600">Total Days:</span>
+                  <span className="font-bold text-secondary-900">{summary.days}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Filter Bar */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
+            <div className="flex gap-2">
+              <button
+                onClick={() => setActiveTab('pending')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  activeTab === 'pending'
+                    ? 'bg-yellow-100 text-yellow-800'
+                    : 'bg-secondary-100 text-secondary-700 hover:bg-secondary-200'
+                }`}
+              >
+                Pending ({employeeRequests.filter(r => r.status === 'pending').length})
+              </button>
+              <button
+                onClick={() => setActiveTab('approved')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  activeTab === 'approved'
+                    ? 'bg-green-100 text-green-800'
+                    : 'bg-secondary-100 text-secondary-700 hover:bg-secondary-200'
+                }`}
+              >
+                Approved ({employeeRequests.filter(r => r.status === 'approved').length})
+              </button>
+              <button
+                onClick={() => setActiveTab('rejected')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  activeTab === 'rejected'
+                    ? 'bg-red-100 text-red-800'
+                    : 'bg-secondary-100 text-secondary-700 hover:bg-secondary-200'
+                }`}
+              >
+                Rejected ({employeeRequests.filter(r => r.status === 'rejected').length})
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-secondary-600">Filter by Type:</label>
+              <select
+                value={selectedTypeFilter}
+                onChange={(e) => setSelectedTypeFilter(e.target.value as LeaveType | 'all')}
+                className="px-4 py-2 border border-secondary-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
+              >
+                <option value="all">All Types</option>
+                <option value="annual">Annual Leave</option>
+                <option value="medical">Medical Leave</option>
+                <option value="emergency">Emergency Leave</option>
+                <option value="duty">Duty Leave</option>
+                <option value="unpaid">Unpaid Leave</option>
+                <option value="maternity">Maternity Leave</option>
+                <option value="paternity">Paternity Leave</option>
+                <option value="compassionate">Compassionate Leave</option>
+                <option value="off_day">Off Day</option>
+              </select>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {showLeaveForm && (
         <Card>
@@ -1159,125 +1351,48 @@ export const Leave = () => {
         </Card>
       )}
 
-      {/* Today's Statistics Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-sm text-secondary-600">Today on Leave</p>
-            <p className="text-2xl font-bold text-blue-600">{leaveRequests.filter(r => r.status === 'approved' && new Date(r.startDate) <= new Date() && new Date(r.endDate) >= new Date()).length}</p>
-            <p className="text-xs text-secondary-500">employees</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-sm text-secondary-600">Today on Duty</p>
-            <p className="text-2xl font-bold text-green-600">{employees.length - leaveRequests.filter(r => r.status === 'approved' && new Date(r.startDate) <= new Date() && new Date(r.endDate) >= new Date()).length}</p>
-            <p className="text-xs text-secondary-500">employees</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-sm text-secondary-600">Today on Sick Leave</p>
-            <p className="text-2xl font-bold text-purple-600">{leaveRequests.filter(r => r.status === 'approved' && r.type === 'medical' && new Date(r.startDate) <= new Date() && new Date(r.endDate) >= new Date()).length}</p>
-            <p className="text-xs text-secondary-500">employees</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-sm text-secondary-600">Pending Requests</p>
-            <p className="text-2xl font-bold text-yellow-600">{leaveRequests.filter(r => r.status === 'pending').length}</p>
-            <p className="text-xs text-secondary-500">awaiting approval</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-sm text-secondary-600">Total Employees</p>
-            <p className="text-2xl font-bold text-secondary-600">{employees.length}</p>
-            <p className="text-xs text-secondary-500">in system</p>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Today's Statistics Cards - Only for managers/admins */}
+      {user?.role !== 'employee' && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-sm text-secondary-600">Today on Leave</p>
+              <p className="text-2xl font-bold text-blue-600">{leaveRequests.filter(r => r.status === 'approved' && new Date(r.startDate) <= new Date() && new Date(r.endDate) >= new Date()).length}</p>
+              <p className="text-xs text-secondary-500">employees</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-sm text-secondary-600">Today on Duty</p>
+              <p className="text-2xl font-bold text-green-600">{employees.length - leaveRequests.filter(r => r.status === 'approved' && new Date(r.startDate) <= new Date() && new Date(r.endDate) >= new Date()).length}</p>
+              <p className="text-xs text-secondary-500">employees</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-sm text-secondary-600">Today on Sick Leave</p>
+              <p className="text-2xl font-bold text-purple-600">{leaveRequests.filter(r => r.status === 'approved' && r.type === 'medical' && new Date(r.startDate) <= new Date() && new Date(r.endDate) >= new Date()).length}</p>
+              <p className="text-xs text-secondary-500">employees</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-sm text-secondary-600">Pending Requests</p>
+              <p className="text-2xl font-bold text-yellow-600">{leaveRequests.filter(r => r.status === 'pending').length}</p>
+              <p className="text-xs text-secondary-500">awaiting approval</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-sm text-secondary-600">Total Employees</p>
+              <p className="text-2xl font-bold text-secondary-600">{employees.length}</p>
+              <p className="text-xs text-secondary-500">in system</p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
-      {/* Filters */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
-            <div className="flex gap-2 w-full sm:w-auto">
-              <button
-                onClick={() => setActiveTab('pending')}
-                className={`flex-1 sm:flex-none px-2 sm:px-4 py-2 rounded-lg font-medium transition-colors text-xs sm:text-sm ${
-                  activeTab === 'pending'
-                    ? 'bg-yellow-100 text-yellow-800'
-                    : 'bg-secondary-100 text-secondary-600 hover:bg-secondary-200'
-                }`}
-              >
-                Pending ({leaveRequests.filter(r => r.status === 'pending').length})
-              </button>
-              <button
-                onClick={() => setActiveTab('approved')}
-                className={`flex-1 sm:flex-none px-2 sm:px-4 py-2 rounded-lg font-medium transition-colors text-xs sm:text-sm ${
-                  activeTab === 'approved'
-                    ? 'bg-green-100 text-green-800'
-                    : 'bg-secondary-100 text-secondary-600 hover:bg-secondary-200'
-                }`}
-              >
-                Approved ({leaveRequests.filter(r => r.status === 'approved').length})
-              </button>
-              <button
-                onClick={() => setActiveTab('rejected')}
-                className={`flex-1 sm:flex-none px-2 sm:px-4 py-2 rounded-lg font-medium transition-colors text-xs sm:text-sm ${
-                  activeTab === 'rejected'
-                    ? 'bg-red-100 text-red-800'
-                    : 'bg-secondary-100 text-secondary-600 hover:bg-secondary-200'
-                }`}
-              >
-                Rejected ({leaveRequests.filter(r => r.status === 'rejected').length})
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-              <Button variant="secondary" className="flex-1 sm:flex-none">
-                <Filter className="w-5 h-5 mr-2" />
-                More Filters
-              </Button>
-              <Button variant="secondary" className="flex-1 sm:flex-none">
-                <Download className="w-5 h-5 mr-2" />
-                Export
-              </Button>
-            </div>
-            {activeTab === 'pending' && selectedRequests.size > 0 && can(PERMISSIONS.LEAVE_APPROVE) && (
-              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                <Button
-                  onClick={() => handleOpenBulkApproval('approve')}
-                  className="bg-green-600 hover:bg-green-700 flex-1 sm:flex-none"
-                >
-                  <Check className="w-5 h-5 mr-2" />
-                  Approve ({selectedRequests.size})
-                </Button>
-                {can(PERMISSIONS.LEAVE_REJECT) && (
-                  <Button
-                    onClick={() => handleOpenBulkApproval('reject')}
-                    className="bg-red-600 hover:bg-red-700 flex-1 sm:flex-none"
-                  >
-                    <XIcon className="w-5 h-5 mr-2" />
-                    Reject ({selectedRequests.size})
-                  </Button>
-                )}
-              </div>
-            )}
-            {activeTab === 'approved' && selectedRequests.size > 0 && can(PERMISSIONS.LEAVE_DELETE) && (
-              <Button
-                onClick={() => setBulkDeleteModal({ show: true })}
-                className="bg-red-600 hover:bg-red-700 flex-1 sm:flex-none"
-              >
-                <XIcon className="w-5 h-5 mr-2" />
-                Delete ({selectedRequests.size})
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Leave Requests */}
+      {/* Leave Requests List */}
       <Card>
         {/* Mobile Cards - visible only on small screens */}
         <div className="sm:hidden space-y-4 p-4">
